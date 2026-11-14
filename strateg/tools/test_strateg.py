@@ -155,6 +155,20 @@ class CheckTests(Base):
                                  "## Вариант B. Новый тариф\n\n## Вариант C. Закрыть направление\n")
         self.assertEqual(self.run_cmd("check", "demo")[0], 0)
 
+    def test_heading_may_name_hypothesis_and_list_numbers_are_not_figures(self):
+        h = self.run_ok("claim", "demo", "--type", "hypothesis", "--text", "Цена — причина оттока").split()[0]
+        self.write("verification.md", f"# План проверки\n\n## 1. Цена — причина оттока [{h}]\n\n"
+                                      "1. Доход на клиента упадёт сильнее, чем вырастет база.\n")
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("цифра без ссылки", out)
+
+    def test_done_without_next_sets_default_action(self):
+        self.write("brief.md", "# Постановка\n\nПочему падает удержание?\n")
+        self.run_ok("step", "demo", "--done", "frame")
+        st = json.loads((self.p / "state.json").read_text(encoding="utf-8"))
+        self.assertIn("skills/collect", st["next_action"])
+
     def test_number_without_reference_is_warning_only(self):
         self.write("strategy-product.md", "Мы ожидаем, что аудитория сервиса составит около 120 тысяч человек.\n")
         code, out, _ = self.run_cmd("check", "demo")

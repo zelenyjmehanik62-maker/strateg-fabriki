@@ -441,6 +441,8 @@ def cmd_step(args):
         idx = STEPS.index(done)
         if st["step"] == done and idx + 1 < len(STEPS):
             st["step"] = STEPS[idx + 1]
+            if args.next is None:
+                st["next_action"] = f"начать шаг «{STEP_NAMES[st['step']]}» по навыку skills/{st['step']}"
     if args.set:
         st["step"] = args.set
     if args.next is not None:
@@ -512,10 +514,13 @@ def check(pdir, finishing=None):
             if cited:
                 if any(c["type"] == "synthetic" for c in cited) and not any(m in low for m in SYNTH_MARKS):
                     errors.append(f"{where}: ответ модельного респондента не назван синтетическим")
-                if all(c["type"] != "fact" for c in cited) and not any(m in low for m in HEDGES + SYNTH_MARKS):
+                # Заголовок называет допущение, а не утверждает его: правило слов-маркеров к нему не применяется.
+                if (all(c["type"] != "fact" for c in cited) and not line.lstrip().startswith("#")
+                        and not any(m in low for m in HEDGES + SYNTH_MARKS)):
                     errors.append(f"{where}: гипотеза или прогноз поданы как факт — "
                                   "назовите это предположением или найдите источник")
-            elif (re.search(r"\d", line) and len(line.strip()) > 40 and "(вывод)" not in low
+            elif (re.search(r"\d", re.sub(r"^\s*(\d+[.)]|[-*])\s+", "", line)) and len(line.strip()) > 40
+                  and "(вывод)" not in low
                   and not line.lstrip().startswith(("#", "|", ">"))):
                 warnings.append(f"{where}: цифра без ссылки на реестр")
 
