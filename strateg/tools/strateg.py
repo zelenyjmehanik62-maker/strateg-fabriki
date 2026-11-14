@@ -333,6 +333,84 @@ def cmd_decide(args):
     print(row["id"])
 
 
+def cmd_decision(args):
+    pdir = project_dir(args.project)
+    path = pdir / "decisions.jsonl"
+    decisions, _ = read_jsonl(path)
+    target = next((d for d in decisions if d.get("id") == args.id), None)
+    if not target:
+        raise Fail(f"{args.id} нет в decisions.jsonl.")
+    if args.status == "confirmed":
+        target["reviewed"] = now()[:10]
+    else:
+        target["status"] = args.status
+        target["closed"] = now()[:10]
+    if args.note:
+        target["note"] = args.note
+    write_jsonl(path, decisions)
+    words = {"confirmed": "подтверждено после пересмотра", "revised": "пересмотрено", "cancelled": "отменено"}
+    print(f"{args.id}: {words[args.status]}")
+
+
+def review(pdir, days):
+    """Что требует внимания после принятых решений."""
+    decisions, _ = read_jsonl(pdir / "decisions.jsonl")
+    claims, _ = read_jsonl(pdir / "evidence.jsonl")
+    sources, _ = read_jsonl(pdir / "sources.jsonl")
+    claims_by_id = {c["id"]: c for c in claims}
+    sources_by_id = {s["id"]: s for s in sources}
+    today = datetime.now().date()
+    urgent, shaky, aging, incomplete, watch = [], [], [], [], []
+    for d in decisions:
+        if d.get("status") != "active":
+            continue
+        label = f"{d['id']} «{d.get('text')}»"
+        for dep in d.get("based_on") or []:
+            c = claims_by_id.get(dep)
+            if not c:
+                continue
+            if c.get("status") != "active":
+                why = "отозвано" if c.get("status") == "revoked" else f"заменено на {c.get('superseded_by', '?')}"
+                urgent.append(f"{label}: основание {dep} {why}")
+                continue
+            if c.get("type") != "fact":
+                shaky.append(f"{label}: опирается на непроверенное {dep} ({c.get('type')}) — «{c.get('text')}»")
+            ages = []
+            for ref in c.get("sources") or []:
+                got = sources_by_id.get(ref.get("id"), {}).get("retrieved")
+                try:
+                    ages.append((today - datetime.strptime(got, "%Y-%m-%d").date()).days)
+                except (TypeError, ValueError):
+                    pass
+            if ages and min(ages) > days:
+                aging.append(f"{label}: данные для {dep} получены {min(ages)} дн. назад — стоит перепроверить")
+        missing = [name for key, name in (("owner", "ответственный"), ("metric", "показатель"),
+                                          ("review_if", "условие пересмотра")) if not d.get(key)]
+        if missing:
+            incomplete.append(f"{label}: не указано — {', '.join(missing)}")
+        if d.get("review_if"):
+            watch.append(f"{label}: пересмотреть, если {d['review_if']} "
+                         f"(показатель: {d.get('metric') or '—'}, отвечает: {d.get('owner') or '—'})")
+    return [("Решать сейчас — основание изменилось", urgent),
+            ("Стоит на гипотезах — нужна проверка", shaky),
+            ("Данные стареют", aging),
+            ("Решение записано не полностью", incomplete),
+            ("Условия пересмотра — сверить с текущими показателями", watch)]
+
+
+def cmd_review(args):
+    pdir = project_dir(args.project)
+    sections = review(pdir, args.days)
+    if not any(items for _, items in sections):
+        print("Активных решений нет или по ним нет замечаний.")
+        return
+    for title, items in sections:
+        if items:
+            print(title + ":")
+            for item in items:
+                print(f"- {item}")
+
+
 def cmd_log(args):
     pdir = project_dir(args.project)
     rows, _ = read_jsonl(pdir / "journal.jsonl")
@@ -406,6 +484,9 @@ def check(pdir, finishing=None):
             for dep in c.get("based_on") or []:
                 if claims_by_id.get(dep, {}).get("status") == "revoked":
                     errors.append(f"{c['id']}: опирается на отозванное {dep} — пересмотрите или отзовите")
+                elif claims_by_id.get(dep, {}).get("status") == "superseded":
+                    warnings.append(f"{c['id']}: опирается на {dep}, которое заменено на "
+                                    f"{claims_by_id[dep].get('superseded_by', '?')} — проверьте, остаётся ли в силе")
 
     for name in RESULT_FILES:
         path = pdir / name
@@ -580,6 +661,18 @@ def build_parser():
     s.add_argument("--metric")
     s.add_argument("--review-if")
     s.set_defaults(fn=cmd_decide)
+
+    s = sub.add_parser("decision", help="изменить статус решения")
+    s.add_argument("project")
+    s.add_argument("id")
+    s.add_argument("--status", required=True, choices=["confirmed", "revised", "cancelled"])
+    s.add_argument("--note")
+    s.set_defaults(fn=cmd_decision)
+
+    s = sub.add_parser("review", help="что решать сейчас и какие основания устарели")
+    s.add_argument("project")
+    s.add_argument("--days", type=int, default=30, help="через сколько дней данные считаются старыми")
+    s.set_defaults(fn=cmd_review)
 
     s = sub.add_parser("log", help="запись в журнал")
     s.add_argument("project")

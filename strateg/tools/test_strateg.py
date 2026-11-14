@@ -234,6 +234,37 @@ class ImpactTests(Base):
         self.assertIn("E-404", err)
 
 
+class ReviewTests(Base):
+    def test_review_flags_changed_basis_hypothesis_and_gaps(self):
+        sid = self.source()
+        e1 = self.fact(sid=sid)
+        h = self.run_ok("claim", "demo", "--type", "hypothesis", "--text", "Цена — барьер").split()[0]
+        d = self.run_ok("decide", "demo", "--text", "Дешёвый тариф", "--based-on", f"{e1},{h}",
+                        "--review-if", "конверсия ниже 2%").split()[0]
+        out = self.run_ok("review", "demo")
+        self.assertIn("Стоит на гипотезах", out)
+        self.assertIn("не указано — ответственный, показатель", out)
+        self.assertIn("конверсия ниже 2%", out)
+        self.assertNotIn("Решать сейчас", out)
+        self.run_ok("claim", "demo", "--type", "fact", "--text", "Тариф стоит 349 ₽",
+                    "--source", f"{sid}:новая таблица", "--supersedes", e1)
+        out = self.run_ok("review", "demo")
+        self.assertIn("Решать сейчас", out)
+        self.assertIn(f"основание {e1} заменено на E-003", out)
+        self.run_ok("decision", "demo", d, "--status", "revised", "--note", "цена конкурента выросла")
+        self.assertNotIn("Решать сейчас", self.run_ok("review", "demo"))
+
+    def test_review_flags_old_data(self):
+        e1 = self.fact()
+        self.run_ok("decide", "demo", "--text", "Дешёвый тариф", "--based-on", e1, "--owner", "РП",
+                    "--metric", "удержание", "--review-if", "удержание < 25%")
+        path = self.p / "sources.jsonl"
+        row = json.loads(path.read_text(encoding="utf-8"))
+        row["retrieved"] = "2026-01-01"
+        path.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
+        self.assertIn("Данные стареют", self.run_ok("review", "demo"))
+
+
 class HookTests(Base):
     def payload(self, name):
         return json.dumps({"tool_input": {"file_path": str(self.p / name)}})

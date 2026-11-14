@@ -23,6 +23,9 @@ python3 tools/strateg.py impact podpiska E-001  # какие утвержден�
 # Решения
 python3 tools/strateg.py decide podpiska --text "Запускаем дешёвый тариф" --based-on E-002,E-005 --owner "руководитель продукта" --metric "удержание 30-го дня" --review-if "удержание < 25% через 6 недель"
 
+python3 tools/strateg.py review podpiska         # что решать сейчас: изменившиеся основания, гипотезы, старые данные
+python3 tools/strateg.py decision podpiska D-001 --status confirmed --note "вывод не меняется"   # или revised, cancelled
+
 # Журнал и состояние
 python3 tools/strateg.py log podpiska --action "разобран сайт тарифов" --tool web --minutes 2 --cost 3 --key fetch:tariffs-x
 python3 tools/strateg.py step podpiska --next "сопоставить цены с оттоком"
@@ -49,7 +52,7 @@ python3 tools/strateg.py cost podpiska
 - `options.md`, где меньше трёх вариантов («## Вариант …»), нет «оставить как есть» или нет возражений;
 - утверждение, которое опирается на отозванное.
 
-Замечания без остановки: цифра без ссылки на реестр, нет варианта «закрыть направление», решение с устаревшим основанием.
+Замечания без остановки: цифра без ссылки на реестр, нет варианта «закрыть направление», решение с устаревшим основанием, утверждение с заменённым основанием.
 
 `step --done <шаг>` сам запускает проверку и не закрывает шаг при ошибках.
 
