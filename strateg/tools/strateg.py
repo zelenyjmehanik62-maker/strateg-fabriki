@@ -1,0 +1,631 @@
+#!/usr/bin/env python3
+"""Инструменты агента «Стратег»: проекты, реестр доказательств, состояние, журнал.
+
+Запуск из папки strateg/:  python3 tools/strateg.py <команда> ...
+Только стандартная библиотека, Python 3.9+. Форматы файлов — docs/CONTRACT.md.
+"""
+import argparse
+import json
+import os
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+
+STEPS = ["frame", "collect", "research", "options", "strategy", "follow"]
+STEP_NAMES = {
+    "frame": "Постановка", "collect": "Материалы", "research": "Исследование",
+    "options": "Варианты", "strategy": "Стратегии", "follow": "Сопровождение",
+}
+SOURCE_KINDS = ["doc", "table", "site", "image", "audio", "video", "interview", "synthetic", "user"]
+CLAIM_TYPES = ["fact", "hypothesis", "forecast", "synthetic"]
+RESULT_FILES = ["findings.md", "options.md", "strategy-product.md", "strategy-comms.md", "verification.md"]
+REF_RE = re.compile(r"\[(E-\d+(?:\s*,\s*E-\d+)*)\]")
+# Слова, которые показывают читателю, что перед ним не факт.
+HEDGES = ("гипотез", "предполож", "прогноз", "оценк", "вероятн", "возможно", "ожида", "может быть", "допущен")
+SYNTH_MARKS = ("синтет", "модельн")
+
+
+class Fail(Exception):
+    """Ошибка, которую нужно показать пользователю без трассировки."""
+
+
+def projects_root():
+    env = os.environ.get("STRATEG_PROJECTS")
+    return Path(env) if env else Path(__file__).resolve().parent.parent / "projects"
+
+
+def now():
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def project_dir(name, must_exist=True):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name or ""):
+        raise Fail(f"Имя проекта «{name}»: только латиница в нижнем регистре, цифры и дефисы.")
+    path = projects_root() / name
+    if must_exist and not (path / "state.json").exists():
+        raise Fail(f"Проект «{name}» не найден. Создать: python3 tools/strateg.py new {name}")
+    return path
+
+
+def read_jsonl(path):
+    rows, errors = [], []
+    if not path.exists():
+        return rows, errors
+    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except ValueError as exc:
+            errors.append(f"{path.name}, строка {n}: не читается как JSON ({exc})")
+    return rows, errors
+
+
+def write_atomic(path, text):
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def write_jsonl(path, rows):
+    write_atomic(path, "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
+
+
+def append_jsonl(path, row):
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def next_id(rows, prefix):
+    nums = [int(r["id"].split("-")[1]) for r in rows if str(r.get("id", "")).startswith(prefix + "-")]
+    return f"{prefix}-{max(nums, default=0) + 1:03d}"
+
+
+def load_state(pdir):
+    return json.loads((pdir / "state.json").read_text(encoding="utf-8"))
+
+
+def save_state(pdir, state):
+    state["updated"] = now()
+    write_atomic(pdir / "state.json", json.dumps(state, ensure_ascii=False, indent=2) + "\n")
+
+
+def journal(pdir, **row):
+    row = {"ts": now(), **row}
+    append_jsonl(pdir / "journal.jsonl", row)
+    return row
+
+
+def split_ids(value):
+    return [x.strip() for x in (value or "").split(",") if x.strip()]
+
+
+# ---------- команды ----------
+
+def cmd_new(args):
+    pdir = project_dir(args.project, must_exist=False)
+    if (pdir / "state.json").exists():
+        raise Fail(f"Проект «{args.project}» уже есть. Продолжить: python3 tools/strateg.py status {args.project}")
+    (pdir / "materials").mkdir(parents=True, exist_ok=True)
+    (pdir / "materials" / ".gitkeep").touch()
+    for name in ("sources.jsonl", "evidence.jsonl", "decisions.jsonl", "journal.jsonl"):
+        (pdir / name).touch()
+    (pdir / "brief.md").write_text(
+        "# Постановка задачи\n\n"
+        "## Вопрос\n\n## Цель\n\n## Кому нужен результат\n\n## Ограничения\n\n## Доступные данные\n",
+        encoding="utf-8")
+    save_state(pdir, {
+        "project": args.project, "step": "frame", "done": [], "waiting_for_user": None,
+        "next_action": "уточнить вопрос, цель, получателя, ограничения и данные", "open_questions": [],
+    })
+    journal(pdir, step="frame", action="создан проект", tool="strateg.py", minutes=0, cost_rub=0,
+            cost_basis="точно", result="ok", human_help=False)
+    print(f"Проект «{args.project}» создан: {pdir}")
+    print("Шаг 1 — Постановка. Материалы пользователя кладите в materials/.")
+
+
+def cost_summary(rows):
+    total_min = sum(float(r.get("minutes") or 0) for r in rows)
+    total_cost = sum(float(r.get("cost_rub") or 0) for r in rows)
+    return total_min, total_cost
+
+
+def cmd_status(args):
+    root = projects_root()
+    if not args.project:
+        found = sorted(p.parent for p in root.glob("*/state.json")) if root.exists() else []
+        if not found:
+            print("Проектов пока нет. Создать: python3 tools/strateg.py new <имя>")
+            return
+        print("Проекты:")
+        for pdir in found:
+            st = load_state(pdir)
+            wait = f" · ждёт пользователя: {st['waiting_for_user']}" if st.get("waiting_for_user") else ""
+            print(f"- {st['project']}: шаг «{STEP_NAMES.get(st['step'], st['step'])}»{wait}")
+            print(f"  дальше: {st.get('next_action') or '—'} (обновлено {st.get('updated', '—')})")
+        return
+    pdir = project_dir(args.project)
+    st = load_state(pdir)
+    sources, _ = read_jsonl(pdir / "sources.jsonl")
+    claims, _ = read_jsonl(pdir / "evidence.jsonl")
+    decisions, _ = read_jsonl(pdir / "decisions.jsonl")
+    rows, _ = read_jsonl(pdir / "journal.jsonl")
+    active = [c for c in claims if c.get("status") == "active"]
+    by_type = {t: sum(1 for c in active if c.get("type") == t) for t in CLAIM_TYPES}
+    minutes, cost = cost_summary(rows)
+    print(f"Проект: {st['project']}")
+    print(f"Шаг: {STEP_NAMES.get(st['step'], st['step'])} ({st['step']})")
+    print("Завершено: " + (", ".join(STEP_NAMES.get(s, s) for s in st.get("done", [])) or "—"))
+    print(f"Следующее действие: {st.get('next_action') or '—'}")
+    if st.get("waiting_for_user"):
+        print(f"Ждём пользователя: {st['waiting_for_user']}")
+    for q in st.get("open_questions", []):
+        print(f"Открытый вопрос: {q}")
+    print(f"Источников: {len(sources)} · утверждений: фактов {by_type['fact']}, гипотез {by_type['hypothesis']}, "
+          f"прогнозов {by_type['forecast']}, синтетических {by_type['synthetic']} · решений: {len(decisions)}")
+    print(f"Потрачено: {minutes:g} мин, {cost:g} ₽")
+    if rows:
+        print("Последние действия:")
+        for r in rows[-5:]:
+            mark = "" if r.get("result") == "ok" else f" [{r.get('result')}]"
+            print(f"- {r.get('ts', '')[:16]} {r.get('step', '')}: {r.get('action', '')}{mark}")
+    print(f"Обновлено: {st.get('updated', '—')}")
+
+
+def cmd_source(args):
+    pdir = project_dir(args.project)
+    path = pdir / "sources.jsonl"
+    rows, _ = read_jsonl(path)
+    for r in rows:
+        if r.get("ref") == args.ref:
+            print(f"{r['id']} (уже в реестре, повторно не добавлен)")
+            return
+    if args.local and not (pdir / args.local).exists():
+        raise Fail(f"Файл {args.local} не найден в папке проекта.")
+    row = {"id": next_id(rows, "S"), "kind": args.kind, "title": args.title, "ref": args.ref,
+           "local": args.local, "retrieved": now()[:10], "note": args.note or ""}
+    append_jsonl(path, row)
+    print(row["id"])
+
+
+def parse_source_arg(value):
+    sid, _, where = value.partition(":")
+    return {"id": sid.strip(), "where": where.strip()}
+
+
+def validate_claim(claim, sources_by_id, claims_by_id):
+    """Возвращает список нарушений для одной записи реестра."""
+    problems = []
+    cid = claim.get("id", "?")
+    ctype = claim.get("type")
+    if ctype not in CLAIM_TYPES:
+        problems.append(f"{cid}: неизвестный тип «{ctype}»")
+    if not (claim.get("text") or "").strip():
+        problems.append(f"{cid}: пустой текст утверждения")
+    refs = claim.get("sources") or []
+    for ref in refs:
+        src = sources_by_id.get(ref.get("id"))
+        if not src:
+            problems.append(f"{cid}: источник {ref.get('id')} не найден в sources.jsonl")
+        elif ctype == "fact" and src.get("kind") == "synthetic":
+            problems.append(f"{cid}: факт опирается на синтетический источник {src['id']} — "
+                            "ответы модельных респондентов фактов не подтверждают")
+    if ctype == "fact":
+        if not refs:
+            problems.append(f"{cid}: факт без источника — найдите источник или понизьте до гипотезы")
+        elif not any((r.get("where") or "").strip() for r in refs):
+            problems.append(f"{cid}: у факта не указано место в источнике (where)")
+    if ctype == "synthetic" and not any(
+            sources_by_id.get(r.get("id"), {}).get("kind") == "synthetic" for r in refs):
+        problems.append(f"{cid}: синтетическое утверждение должно ссылаться на источник вида synthetic")
+    for dep in claim.get("based_on") or []:
+        if dep not in claims_by_id:
+            problems.append(f"{cid}: based_on ссылается на несуществующее {dep}")
+    sup = claim.get("supersedes")
+    if sup and sup not in claims_by_id:
+        problems.append(f"{cid}: supersedes ссылается на несуществующее {sup}")
+    return problems
+
+
+def cmd_claim(args):
+    pdir = project_dir(args.project)
+    path = pdir / "evidence.jsonl"
+    claims, _ = read_jsonl(path)
+    sources, _ = read_jsonl(pdir / "sources.jsonl")
+    by_id = {c["id"]: c for c in claims}
+    row = {"id": next_id(claims, "E"), "text": args.text.strip(), "type": args.type,
+           "sources": [parse_source_arg(s) for s in args.source or []],
+           "based_on": split_ids(args.based_on), "confidence": args.confidence,
+           "status": "active", "supersedes": args.supersedes, "added": now()[:10]}
+    problems = validate_claim(row, {s["id"]: s for s in sources}, by_id)
+    if problems:
+        raise Fail("Утверждение не записано:\n- " + "\n- ".join(problems))
+    if args.supersedes:
+        by_id[args.supersedes]["status"] = "superseded"
+        by_id[args.supersedes]["superseded_by"] = row["id"]
+        write_jsonl(path, claims + [row])
+    else:
+        append_jsonl(path, row)
+    print(row["id"])
+    if args.supersedes:
+        print(f"{args.supersedes} заменено. Что затронуто:")
+        print_impact(pdir, args.supersedes)
+
+
+def cmd_revoke(args):
+    pdir = project_dir(args.project)
+    path = pdir / "evidence.jsonl"
+    claims, _ = read_jsonl(path)
+    target = next((c for c in claims if c.get("id") == args.id), None)
+    if not target:
+        raise Fail(f"{args.id} нет в реестре.")
+    target["status"] = "revoked"
+    target["revoked_reason"] = args.reason
+    target["revoked"] = now()[:10]
+    write_jsonl(path, claims)
+    print(f"{args.id} отозвано. Что затронуто:")
+    print_impact(pdir, args.id)
+
+
+def impact(pdir, claim_id):
+    """Что опирается на утверждение: другие утверждения, решения, строки результатов."""
+    claims, _ = read_jsonl(pdir / "evidence.jsonl")
+    decisions, _ = read_jsonl(pdir / "decisions.jsonl")
+    affected, frontier = {claim_id}, [claim_id]
+    while frontier:
+        cur = frontier.pop()
+        for c in claims:
+            if cur in (c.get("based_on") or []) and c["id"] not in affected:
+                affected.add(c["id"])
+                frontier.append(c["id"])
+    dependent = [c for c in claims if c["id"] in affected and c["id"] != claim_id]
+    hit_decisions = [d for d in decisions if affected & set(d.get("based_on") or [])]
+    lines = []
+    for name in RESULT_FILES:
+        path = pdir / name
+        if not path.exists():
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            ids = {i for m in REF_RE.finditer(line) for i in split_ids(m.group(1))}
+            if ids & affected:
+                lines.append((name, n, line.strip()))
+    return dependent, hit_decisions, lines
+
+
+def print_impact(pdir, claim_id):
+    dependent, decisions, lines = impact(pdir, claim_id)
+    if not (dependent or decisions or lines):
+        print("- ничего: на это утверждение пока никто не опирается")
+        return
+    for c in dependent:
+        print(f"- утверждение {c['id']} ({c.get('type')}): {c.get('text')}")
+    for d in decisions:
+        print(f"- решение {d['id']}: {d.get('text')} — ответственный: {d.get('owner') or 'не указан'}")
+    for name, n, text in lines:
+        print(f"- {name}:{n}: {text[:160]}")
+
+
+def cmd_impact(args):
+    pdir = project_dir(args.project)
+    claims, _ = read_jsonl(pdir / "evidence.jsonl")
+    if not any(c.get("id") == args.id for c in claims):
+        raise Fail(f"{args.id} нет в реестре.")
+    print(f"Если {args.id} изменится, затронуто:")
+    print_impact(pdir, args.id)
+
+
+def cmd_decide(args):
+    pdir = project_dir(args.project)
+    path = pdir / "decisions.jsonl"
+    decisions, _ = read_jsonl(path)
+    claims, _ = read_jsonl(pdir / "evidence.jsonl")
+    known = {c["id"] for c in claims}
+    based = split_ids(args.based_on)
+    missing = [b for b in based if b not in known]
+    if missing:
+        raise Fail("Решение не записано: в реестре нет " + ", ".join(missing))
+    if not based:
+        raise Fail("Решение не записано: укажите основания (--based-on E-001,E-002).")
+    row = {"id": next_id(decisions, "D"), "date": now()[:10], "text": args.text.strip(), "based_on": based,
+           "owner": args.owner, "metric": args.metric, "review_if": args.review_if, "status": "active"}
+    append_jsonl(path, row)
+    print(row["id"])
+
+
+def cmd_log(args):
+    pdir = project_dir(args.project)
+    rows, _ = read_jsonl(pdir / "journal.jsonl")
+    if args.key:
+        for r in rows:
+            if r.get("key") == args.key and r.get("result") == "ok":
+                print(f"Уже выполнено {r.get('ts', '')[:16]}: {r.get('action')}. Повторять не нужно.")
+                return
+    step = args.step or load_state(pdir)["step"]
+    row = journal(pdir, step=step, action=args.action, tool=args.tool, model=args.model,
+                  minutes=args.minutes, cost_rub=args.cost, cost_basis=args.basis,
+                  result=args.result, human_help=args.human_help, key=args.key)
+    print(f"Записано: {row['step']} · {row['action']} · {row['result']}")
+
+
+def cmd_step(args):
+    pdir = project_dir(args.project)
+    st = load_state(pdir)
+    for done in args.done or []:
+        report = check(pdir, finishing=done)
+        if report["errors"]:
+            print_report(report)
+            raise Fail(f"Шаг «{STEP_NAMES[done]}» не закрыт: сначала исправьте ошибки проверки.")
+        if done not in st["done"]:
+            st["done"].append(done)
+        idx = STEPS.index(done)
+        if st["step"] == done and idx + 1 < len(STEPS):
+            st["step"] = STEPS[idx + 1]
+    if args.set:
+        st["step"] = args.set
+    if args.next is not None:
+        st["next_action"] = args.next
+    if args.waiting is not None:
+        st["waiting_for_user"] = args.waiting or None
+    for q in args.question or []:
+        if q not in st["open_questions"]:
+            st["open_questions"].append(q)
+    for q in args.answered or []:
+        st["open_questions"] = [x for x in st["open_questions"] if x != q]
+    save_state(pdir, st)
+    print(f"Состояние сохранено: шаг «{STEP_NAMES[st['step']]}», дальше — {st.get('next_action') or '—'}")
+
+
+def meaningful(path):
+    """Файл результата начат, если в нём есть что-то кроме заголовков."""
+    if not path.exists():
+        return False
+    return any(l.strip() and not l.lstrip().startswith("#") for l in path.read_text(encoding="utf-8").splitlines())
+
+
+def check(pdir, finishing=None):
+    errors, warnings = [], []
+    sources, e1 = read_jsonl(pdir / "sources.jsonl")
+    claims, e2 = read_jsonl(pdir / "evidence.jsonl")
+    decisions, e3 = read_jsonl(pdir / "decisions.jsonl")
+    errors += e1 + e2 + e3
+    sources_by_id = {s.get("id"): s for s in sources}
+    claims_by_id = {c.get("id"): c for c in claims}
+    if len(sources_by_id) != len(sources):
+        errors.append("sources.jsonl: повторяющиеся номера источников")
+    if len(claims_by_id) != len(claims):
+        errors.append("evidence.jsonl: повторяющиеся номера утверждений")
+    for s in sources:
+        if not (s.get("ref") or "").strip():
+            errors.append(f"{s.get('id')}: у источника нет ссылки или пути (ref)")
+        if s.get("local") and not (pdir / s["local"]).exists():
+            warnings.append(f"{s.get('id')}: локальная копия {s['local']} не найдена")
+    for c in claims:
+        if c.get("status") == "active":
+            errors += validate_claim(c, sources_by_id, claims_by_id)
+            for dep in c.get("based_on") or []:
+                if claims_by_id.get(dep, {}).get("status") == "revoked":
+                    errors.append(f"{c['id']}: опирается на отозванное {dep} — пересмотрите или отзовите")
+
+    for name in RESULT_FILES:
+        path = pdir / name
+        if not path.exists():
+            continue
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            where = f"{name}:{n}"
+            ids = [i for m in REF_RE.finditer(line) for i in split_ids(m.group(1))]
+            low = line.lower()
+            cited = []
+            for cid in ids:
+                c = claims_by_id.get(cid)
+                if not c:
+                    errors.append(f"{where}: ссылка на несуществующее {cid}")
+                elif c.get("status") == "revoked":
+                    errors.append(f"{where}: ссылка на отозванное {cid}")
+                elif c.get("status") == "superseded":
+                    errors.append(f"{where}: {cid} заменено на {c.get('superseded_by', '?')} — обновите ссылку и текст")
+                else:
+                    cited.append(c)
+            if cited:
+                if any(c["type"] == "synthetic" for c in cited) and not any(m in low for m in SYNTH_MARKS):
+                    errors.append(f"{where}: ответ модельного респондента не назван синтетическим")
+                if all(c["type"] != "fact" for c in cited) and not any(m in low for m in HEDGES + SYNTH_MARKS):
+                    errors.append(f"{where}: гипотеза или прогноз поданы как факт — "
+                                  "назовите это предположением или найдите источник")
+            elif (re.search(r"\d", line) and len(line.strip()) > 40 and "(вывод)" not in low
+                  and not line.lstrip().startswith(("#", "|", ">"))):
+                warnings.append(f"{where}: цифра без ссылки на реестр")
+
+    findings = pdir / "findings.md"
+    if meaningful(findings) and "чего мы не знаем" not in findings.read_text(encoding="utf-8").lower():
+        errors.append("findings.md: нет раздела «Чего мы не знаем»")
+    options = pdir / "options.md"
+    if meaningful(options):
+        text = options.read_text(encoding="utf-8").lower()
+        count = len(re.findall(r"^##\s+вариант", text, flags=re.M))
+        if count < 3:
+            errors.append(f"options.md: вариантов {count}, нужно не меньше трёх (заголовки «## Вариант …»)")
+        if "оставить как есть" not in text:
+            errors.append("options.md: нет варианта «оставить как есть»")
+        if "закрыть направление" not in text:
+            warnings.append("options.md: нет варианта «закрыть направление»")
+        if "возражен" not in text:
+            errors.append("options.md: у вариантов нет возражений")
+
+    required = {"frame": ["brief.md"], "research": ["plan.md", "findings.md"], "options": ["options.md"],
+                "strategy": ["strategy-product.md", "strategy-comms.md", "verification.md"]}
+    for name in required.get(finishing, []):
+        if not meaningful(pdir / name):
+            errors.append(f"{name}: не заполнен, а шаг «{STEP_NAMES[finishing]}» закрывается")
+    if finishing == "collect" and not sources:
+        errors.append("sources.jsonl: ни одного источника, а шаг «Материалы» закрывается")
+
+    for d in decisions:
+        if d.get("status") != "active":
+            continue
+        for dep in d.get("based_on") or []:
+            st = claims_by_id.get(dep, {}).get("status")
+            if st is None:
+                errors.append(f"{d.get('id')}: основание {dep} не найдено в реестре")
+            elif st != "active":
+                warnings.append(f"{d.get('id')}: основание {dep} устарело — решение «{d.get('text')}» пора пересмотреть")
+    return {"errors": errors, "warnings": warnings, "claims": len(claims), "sources": len(sources)}
+
+
+def print_report(report, out=None):
+    out = out or sys.stdout
+    for e in report["errors"]:
+        print(f"ОШИБКА  {e}", file=out)
+    for w in report["warnings"]:
+        print(f"внимание  {w}", file=out)
+    if not report["errors"]:
+        print(f"Проверка пройдена: источников {report['sources']}, утверждений {report['claims']}, "
+              f"замечаний {len(report['warnings'])}.", file=out)
+    else:
+        print(f"Проверка не пройдена: ошибок {len(report['errors'])}.", file=out)
+
+
+def cmd_check(args):
+    report = check(project_dir(args.project))
+    print_report(report)
+    return 1 if report["errors"] else 0
+
+
+def cmd_cost(args):
+    pdir = project_dir(args.project)
+    rows, _ = read_jsonl(pdir / "journal.jsonl")
+    minutes, cost = cost_summary(rows)
+    print(f"Проект {args.project}: {len(rows)} действий, {minutes:g} мин, {cost:g} ₽")
+    for step in STEPS:
+        part = [r for r in rows if r.get("step") == step]
+        if part:
+            m, c = cost_summary(part)
+            print(f"- {STEP_NAMES[step]}: {len(part)} действий, {m:g} мин, {c:g} ₽")
+    estimated = sum(float(r.get("cost_rub") or 0) for r in rows if r.get("cost_basis") != "точно")
+    print(f"Из расходов по оценке, а не по счёту: {estimated:g} ₽")
+    print(f"Ошибок инструментов: {sum(1 for r in rows if r.get('result') == 'error')}")
+    print(f"Вмешательств человека: {sum(1 for r in rows if r.get('human_help'))}")
+
+
+def cmd_hook_edit(args):
+    """Хук после правки файла: если это результат проекта, проверяет его сразу."""
+    try:
+        data = json.load(sys.stdin)
+        path = Path(data.get("tool_input", {}).get("file_path", "")).resolve()
+    except (ValueError, OSError):
+        return 0
+    root = projects_root().resolve()
+    if root not in path.parents or path.name not in RESULT_FILES:
+        return 0
+    pdir = root / path.relative_to(root).parts[0]
+    if not (pdir / "state.json").exists():
+        return 0
+    report = check(pdir)
+    mine = [e for e in report["errors"] if e.startswith(path.name)]
+    if not mine:
+        return 0
+    print(f"Проверка {path.name} нашла нарушения правил доказательности:", file=sys.stderr)
+    for e in mine:
+        print(f"- {e}", file=sys.stderr)
+    return 2
+
+
+def build_parser():
+    p = argparse.ArgumentParser(prog="strateg.py", description="Инструменты агента «Стратег»")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    s = sub.add_parser("new", help="создать проект")
+    s.add_argument("project")
+    s.set_defaults(fn=cmd_new)
+
+    s = sub.add_parser("status", help="проекты или состояние проекта")
+    s.add_argument("project", nargs="?")
+    s.set_defaults(fn=cmd_status)
+
+    s = sub.add_parser("source", help="добавить источник")
+    s.add_argument("project")
+    s.add_argument("--kind", required=True, choices=SOURCE_KINDS)
+    s.add_argument("--title", required=True)
+    s.add_argument("--ref", required=True, help="ссылка или путь к материалу")
+    s.add_argument("--local", help="путь к копии внутри папки проекта")
+    s.add_argument("--note")
+    s.set_defaults(fn=cmd_source)
+
+    s = sub.add_parser("claim", help="добавить утверждение в реестр")
+    s.add_argument("project")
+    s.add_argument("--type", required=True, choices=CLAIM_TYPES)
+    s.add_argument("--text", required=True)
+    s.add_argument("--source", action="append", metavar="S-001:место", help="можно несколько раз")
+    s.add_argument("--based-on", help="E-001,E-002")
+    s.add_argument("--confidence", default="medium", choices=["high", "medium", "low"])
+    s.add_argument("--supersedes", help="номер утверждения, которое заменяется")
+    s.set_defaults(fn=cmd_claim)
+
+    s = sub.add_parser("revoke", help="отозвать утверждение")
+    s.add_argument("project")
+    s.add_argument("id")
+    s.add_argument("--reason", required=True)
+    s.set_defaults(fn=cmd_revoke)
+
+    s = sub.add_parser("impact", help="что опирается на утверждение")
+    s.add_argument("project")
+    s.add_argument("id")
+    s.set_defaults(fn=cmd_impact)
+
+    s = sub.add_parser("decide", help="записать решение")
+    s.add_argument("project")
+    s.add_argument("--text", required=True)
+    s.add_argument("--based-on", required=True)
+    s.add_argument("--owner")
+    s.add_argument("--metric")
+    s.add_argument("--review-if")
+    s.set_defaults(fn=cmd_decide)
+
+    s = sub.add_parser("log", help="запись в журнал")
+    s.add_argument("project")
+    s.add_argument("--action", required=True)
+    s.add_argument("--tool", required=True)
+    s.add_argument("--step", choices=STEPS)
+    s.add_argument("--model")
+    s.add_argument("--minutes", type=float, default=0)
+    s.add_argument("--cost", type=float, default=0, help="рубли")
+    s.add_argument("--basis", default="оценка", choices=["точно", "оценка"])
+    s.add_argument("--result", default="ok", choices=["ok", "error", "skipped"])
+    s.add_argument("--human-help", action="store_true")
+    s.add_argument("--key", help="метка действия: повтор с той же меткой не выполняется")
+    s.set_defaults(fn=cmd_log)
+
+    s = sub.add_parser("step", help="обновить состояние")
+    s.add_argument("project")
+    s.add_argument("--done", action="append", choices=STEPS, help="закрыть шаг (с проверкой)")
+    s.add_argument("--set", choices=STEPS, help="перейти на шаг без закрытия")
+    s.add_argument("--next", help="следующее действие")
+    s.add_argument("--waiting", help="чего ждём от пользователя; пустая строка — сбросить")
+    s.add_argument("--question", action="append", help="добавить открытый вопрос")
+    s.add_argument("--answered", action="append", help="снять открытый вопрос")
+    s.set_defaults(fn=cmd_step)
+
+    s = sub.add_parser("check", help="проверка реестра и ссылок")
+    s.add_argument("project")
+    s.set_defaults(fn=cmd_check)
+
+    s = sub.add_parser("cost", help="время и расходы")
+    s.add_argument("project")
+    s.set_defaults(fn=cmd_cost)
+
+    s = sub.add_parser("hook-edit", help="для хуков среды: проверка после правки файла")
+    s.set_defaults(fn=cmd_hook_edit)
+    return p
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    try:
+        return args.fn(args) or 0
+    except Fail as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
