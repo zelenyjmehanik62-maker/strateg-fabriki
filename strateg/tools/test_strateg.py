@@ -214,9 +214,20 @@ class StateTests(Base):
         self.run_ok("log", "demo", "--action", "разбор", "--tool", "llm", "--minutes", "6", "--cost", "5.5",
                     "--basis", "точно", "--human-help")
         out = self.run_ok("cost", "demo")
-        self.assertIn("10 мин, 15.5 ₽", out)
+        self.assertIn("Время по оценке агента: 10 мин", out)
+        self.assertIn("Расходы: 15.5 ₽ (измерено у 2 действий из 3)", out)
         self.assertIn("по оценке, а не по счёту: 10 ₽", out)
         self.assertIn("Вмешательств человека: 1", out)
+
+
+    def test_unmeasured_cost_is_not_zero_and_clock_skips_pauses(self):
+        self.run_ok("log", "demo", "--action", "поиск", "--tool", "web")
+        out = self.run_ok("cost", "demo")
+        self.assertIn("Расходы: расходы не измерены", out)
+        self.assertIn("расходы не измерены", self.run_ok("status", "demo"))
+        rows = [{"ts": "2026-11-14T10:00:00+03:00"}, {"ts": "2026-11-14T10:07:00+03:00"},
+                {"ts": "2026-11-14T13:00:00+03:00"}, {"ts": "2026-11-14T13:05:00+03:00"}]
+        self.assertEqual(strateg.clock_minutes(rows), 12)
 
 
 class ImpactTests(Base):
@@ -257,6 +268,7 @@ class ReviewTests(Base):
                         "--review-if", "конверсия ниже 2%").split()[0]
         out = self.run_ok("review", "demo")
         self.assertIn("Стоит на гипотезах", out)
+        self.assertEqual(out.count("опирается на непроверенные"), 1)
         self.assertIn("не указано — ответственный, показатель", out)
         self.assertIn("конверсия ниже 2%", out)
         self.assertNotIn("Решать сейчас", out)

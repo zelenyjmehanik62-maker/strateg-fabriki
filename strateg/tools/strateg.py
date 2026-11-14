@@ -121,16 +121,46 @@ def cmd_new(args):
         "project": args.project, "step": "frame", "done": [], "waiting_for_user": None,
         "next_action": "уточнить вопрос, цель, получателя, ограничения и данные", "open_questions": [],
     })
-    journal(pdir, step="frame", action="создан проект", tool="strateg.py", minutes=0, cost_rub=0,
-            cost_basis="точно", result="ok", human_help=False)
+    journal(pdir, step="frame", action="создан проект", tool="strateg.py", minutes=0, cost_rub=None,
+            cost_basis="оценка", result="ok", human_help=False)
     print(f"Проект «{args.project}» создан: {pdir}")
     print("Шаг 1 — Постановка. Материалы пользователя кладите в materials/.")
+
+
+PAUSE_MIN = 20  # перерыв дольше этого считаем паузой в работе, а не работой
 
 
 def cost_summary(rows):
     total_min = sum(float(r.get("minutes") or 0) for r in rows)
     total_cost = sum(float(r.get("cost_rub") or 0) for r in rows)
     return total_min, total_cost
+
+
+def clock_minutes(rows):
+    """Время по отметкам журнала: сумма промежутков между записями без длинных пауз."""
+    stamps = []
+    for r in rows:
+        try:
+            stamps.append(datetime.fromisoformat(r["ts"]))
+        except (KeyError, ValueError):
+            pass
+    stamps.sort()
+    total = 0.0
+    for a, b in zip(stamps, stamps[1:]):
+        gap = (b - a).total_seconds() / 60
+        if gap <= PAUSE_MIN:
+            total += gap
+    return round(total)
+
+
+def money_line(rows):
+    measured = [r for r in rows if r.get("cost_rub") is not None]
+    if not measured:
+        return "расходы не измерены"
+    text = f"{sum(float(r['cost_rub']) for r in measured):g} ₽"
+    if len(measured) < len(rows):
+        text += f" (измерено у {len(measured)} действий из {len(rows)})"
+    return text
 
 
 def cmd_status(args):
@@ -155,7 +185,6 @@ def cmd_status(args):
     rows, _ = read_jsonl(pdir / "journal.jsonl")
     active = [c for c in claims if c.get("status") == "active"]
     by_type = {t: sum(1 for c in active if c.get("type") == t) for t in CLAIM_TYPES}
-    minutes, cost = cost_summary(rows)
     print(f"Проект: {st['project']}")
     print(f"Шаг: {STEP_NAMES.get(st['step'], st['step'])} ({st['step']})")
     print("Завершено: " + (", ".join(STEP_NAMES.get(s, s) for s in st.get("done", [])) or "—"))
@@ -166,7 +195,7 @@ def cmd_status(args):
         print(f"Открытый вопрос: {q}")
     print(f"Источников: {len(sources)} · утверждений: фактов {by_type['fact']}, гипотез {by_type['hypothesis']}, "
           f"прогнозов {by_type['forecast']}, синтетических {by_type['synthetic']} · решений: {len(decisions)}")
-    print(f"Потрачено: {minutes:g} мин, {cost:g} ₽")
+    print(f"Потрачено: {clock_minutes(rows)} мин по отметкам журнала; {money_line(rows)}")
     if rows:
         print("Последние действия:")
         for r in rows[-5:]:
@@ -366,7 +395,9 @@ def review(pdir, days):
     for d in decisions:
         if d.get("status") != "active":
             continue
-        label = f"{d['id']} «{d.get('text')}»"
+        text = d.get("text") or ""
+        label = f"{d['id']} «{text if len(text) <= 90 else text[:87] + '…'}»"
+        unproven = []
         for dep in d.get("based_on") or []:
             c = claims_by_id.get(dep)
             if not c:
@@ -376,7 +407,7 @@ def review(pdir, days):
                 urgent.append(f"{label}: основание {dep} {why}")
                 continue
             if c.get("type") != "fact":
-                shaky.append(f"{label}: опирается на непроверенное {dep} ({c.get('type')}) — «{c.get('text')}»")
+                unproven.append(dep)
             ages = []
             for ref in c.get("sources") or []:
                 got = sources_by_id.get(ref.get("id"), {}).get("retrieved")
@@ -386,6 +417,8 @@ def review(pdir, days):
                     pass
             if ages and min(ages) > days:
                 aging.append(f"{label}: данные для {dep} получены {min(ages)} дн. назад — стоит перепроверить")
+        if unproven:
+            shaky.append(f"{label}: опирается на непроверенные {', '.join(unproven)} — подробности: show <проект> <номер>")
         missing = [name for key, name in (("owner", "ответственный"), ("metric", "показатель"),
                                           ("review_if", "условие пересмотра")) if not d.get(key)]
         if missing:
@@ -519,7 +552,8 @@ def check(pdir, finishing=None):
                         and not any(m in low for m in HEDGES + SYNTH_MARKS)):
                     errors.append(f"{where}: гипотеза или прогноз поданы как факт — "
                                   "назовите это предположением или найдите источник")
-            elif (re.search(r"\d", re.sub(r"^\s*(\d+[.)]|[-*])\s+", "", line)) and len(line.strip()) > 40
+            elif (name != "verification.md"
+                  and re.search(r"\d", re.sub(r"^\s*(\d+[.)]|[-*])\s+", "", line)) and len(line.strip()) > 40
                   and "(вывод)" not in low
                   and not line.lstrip().startswith(("#", "|", ">"))):
                 warnings.append(f"{where}: цифра без ссылки на реестр")
@@ -582,15 +616,22 @@ def cmd_check(args):
 def cmd_cost(args):
     pdir = project_dir(args.project)
     rows, _ = read_jsonl(pdir / "journal.jsonl")
-    minutes, cost = cost_summary(rows)
-    print(f"Проект {args.project}: {len(rows)} действий, {minutes:g} мин, {cost:g} ₽")
+    minutes, _ = cost_summary(rows)
+    print(f"Проект {args.project}: {len(rows)} действий")
+    print(f"Время по отметкам журнала: {clock_minutes(rows)} мин "
+          f"(от записи до записи, перерывы дольше {PAUSE_MIN} мин не считаются)")
+    if minutes:
+        print(f"Время по оценке агента: {minutes:g} мин — это оценка труда, а не замер")
+    print(f"Расходы: {money_line(rows)}")
     for step in STEPS:
         part = [r for r in rows if r.get("step") == step]
         if part:
-            m, c = cost_summary(part)
-            print(f"- {STEP_NAMES[step]}: {len(part)} действий, {m:g} мин, {c:g} ₽")
+            print(f"- {STEP_NAMES[step]}: {len(part)} действий; {money_line(part)}")
     estimated = sum(float(r.get("cost_rub") or 0) for r in rows if r.get("cost_basis") != "точно")
     print(f"Из расходов по оценке, а не по счёту: {estimated:g} ₽")
+    if all(r.get("cost_rub") is None for r in rows):
+        print("Чтобы узнать расходы, возьмите цифру из своей среды (например, счётчик расхода в Claude Code) "
+              "и запишите: log <проект> --action \"расход за сеанс\" --tool среда --cost <рубли> --basis точно")
     print(f"Ошибок инструментов: {sum(1 for r in rows if r.get('result') == 'error')}")
     print(f"Вмешательств человека: {sum(1 for r in rows if r.get('human_help'))}")
 
@@ -813,7 +854,7 @@ def build_parser():
     s.add_argument("--step", choices=STEPS)
     s.add_argument("--model")
     s.add_argument("--minutes", type=float, default=0)
-    s.add_argument("--cost", type=float, default=0, help="рубли")
+    s.add_argument("--cost", type=float, default=None, help="рубли; не указывайте, если расход не измерен")
     s.add_argument("--basis", default="оценка", choices=["точно", "оценка"])
     s.add_argument("--result", default="ok", choices=["ok", "error", "skipped"])
     s.add_argument("--human-help", action="store_true")
