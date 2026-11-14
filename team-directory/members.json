@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "updated_on": "2026-11-14",
+  "repository": "zelenyjmehanik62-maker/strateg-fabriki",
+  "members": [
+    {
+      "person_id": "ratmir",
+      "name": "Ратмир",
+      "github_accounts": ["zelenyjmehanik62-maker", "wtvfdt8yrr-commits"],
+      "role": "owner",
+      "focus": "Ядро агента: процесс, состояние, реестр доказательств, скрипты"
+    },
+    {
+      "person_id": "vlad",
+      "name": "Влад",
+      "github_accounts": ["Vlad1768"],
+      "role": "member",
+      "focus": "Методика и навыки агента"
+    },
+    {
+      "person_id": "nika",
+      "name": "Ника",
+      "github_accounts": ["nikssshjj1688"],
+      "role": "member",
+      "focus": "Демо-проект, сравнение, инструкция запуска, видео и PDF"
+    }
+  ]
+}
