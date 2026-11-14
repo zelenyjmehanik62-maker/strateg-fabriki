@@ -107,4 +107,8 @@ python3 tools/strateg.py impact <проект> E-012   что затронет �
 python3 tools/strateg.py cost <проект>       сводка времени и расходов
 ```
 
-Точные имена команд фиксирует T2; изменения — сообщением в канал.
+Полный список команд, включая запись (`source`, `claim`, `revoke`, `log`, `step`), — в `strateg/tools/README.md`. Агент пишет в `.jsonl` и `state.json` только через эти команды, не руками.
+
+## 11. Имена навыков
+
+`strateg/AGENTS.md` ссылается на навыки по именам: `frame`, `collect`, `research`, `options`, `strategy`, `verification` (обязательный минимум), `interview`, `ux`, `data` (дополнительный уровень), `follow` (сопровождение). Переименование — через канал.
