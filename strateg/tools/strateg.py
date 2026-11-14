@@ -12,6 +12,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 STEPS = ["frame", "collect", "research", "options", "strategy", "follow"]
 STEP_NAMES = {
     "frame": "Постановка", "collect": "Материалы", "research": "Исследование",
@@ -588,6 +590,131 @@ def cmd_cost(args):
     print(f"Вмешательств человека: {sum(1 for r in rows if r.get('human_help'))}")
 
 
+def cmd_extract(args):
+    import extract as ex
+    pdir = project_dir(args.project)
+    src = Path(args.file)
+    if not src.is_absolute():
+        src = pdir / src
+    if not src.is_file():
+        raise Fail(f"Файл не найден: {src}")
+    out_dir = pdir / "materials" / "_text"
+    done = sorted(out_dir.glob(src.name + ".*")) if out_dir.exists() else []
+    if done and not args.force and all(p.stat().st_mtime >= src.stat().st_mtime for p in done):
+        print("Уже разобран, повторять не нужно:")
+        for p in done:
+            print(f"- {p.relative_to(pdir)}")
+        return
+    try:
+        parts = ex.extract(src)
+    except ex.ExtractError as exc:
+        raise Fail(str(exc))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Разобран {src.name}:")
+    for suffix, text, note in parts:
+        out = out_dir / (src.name + suffix)
+        write_atomic(out, text)
+        print(f"- {out.relative_to(pdir)} — {len(text.splitlines())} строк, {len(text)} знаков; {note}")
+    if not any(text.strip() for _, text, _ in parts):
+        print("Внимание: текста в файле не найдено (возможно, это скан или картинки).")
+
+
+def stems(words):
+    out = []
+    for w in re.findall(r"[0-9a-zа-яё]+", " ".join(words).lower()):
+        out.append(w[:3] if len(w) <= 4 else w[:len(w) - 2])
+    return out
+
+
+def cmd_find(args):
+    pdir = project_dir(args.project)
+    keys = stems(args.words)
+    if not keys:
+        raise Fail("Укажите слова для поиска.")
+    claims, _ = read_jsonl(pdir / "evidence.jsonl")
+    sources, _ = read_jsonl(pdir / "sources.jsonl")
+    decisions, _ = read_jsonl(pdir / "decisions.jsonl")
+    hits = []
+
+    def consider(label, text):
+        low = (text or "").lower()
+        score = sum(1 for k in keys if k in low)
+        if score:
+            hits.append((score, label))
+
+    for c in claims:
+        status = "" if c.get("status") == "active" else f", {c.get('status')}"
+        consider(f"{c['id']} ({c.get('type')}{status}): {c.get('text')}", c.get("text"))
+    for s in sources:
+        consider(f"{s['id']} ({s.get('kind')}): {s.get('title')} — {s.get('ref')}",
+                 " ".join(filter(None, [s.get("title"), s.get("note"), s.get("ref")])))
+    for d in decisions:
+        consider(f"{d['id']} (решение, {d.get('status')}): {d.get('text')}", d.get("text"))
+    if args.files:
+        paths = [pdir / n for n in RESULT_FILES + ["brief.md", "plan.md"]]
+        paths += sorted((pdir / "materials" / "_text").glob("*")) if (pdir / "materials" / "_text").exists() else []
+        for path in paths:
+            if not path.is_file():
+                continue
+            for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+                consider(f"{path.relative_to(pdir)}:{n}: {line.strip()[:160]}", line)
+    full = [h for h in hits if h[0] == len(keys)]
+    shown = full or sorted(hits, key=lambda h: -h[0])
+    if not shown:
+        print("Ничего не найдено. Попробуйте другие слова или добавьте --files для поиска по материалам.")
+        return
+    if not full:
+        print("Точных совпадений по всем словам нет; частичные:")
+    for _, label in shown[:args.limit]:
+        print(f"- {label}")
+    if len(shown) > args.limit:
+        print(f"… ещё {len(shown) - args.limit}. Уточните запрос или увеличьте --limit.")
+
+
+def cmd_show(args):
+    pdir = project_dir(args.project)
+    claims, _ = read_jsonl(pdir / "evidence.jsonl")
+    sources, _ = read_jsonl(pdir / "sources.jsonl")
+    decisions, _ = read_jsonl(pdir / "decisions.jsonl")
+    sources_by_id = {s["id"]: s for s in sources}
+    claims_by_id = {c["id"]: c for c in claims}
+    rid = args.id
+    if rid in claims_by_id:
+        c = claims_by_id[rid]
+        print(f"{rid} · {c.get('type')} · уверенность {c.get('confidence')} · {c.get('status')} · добавлено {c.get('added')}")
+        print(c.get("text"))
+        if c.get("status") == "superseded":
+            print(f"Заменено на {c.get('superseded_by')}")
+        if c.get("status") == "revoked":
+            print(f"Отозвано: {c.get('revoked_reason')}")
+        for ref in c.get("sources") or []:
+            s = sources_by_id.get(ref.get("id"), {})
+            print(f"Источник {ref.get('id')}: {s.get('title')} — {s.get('ref')} · место: {ref.get('where') or '—'}")
+        for dep in c.get("based_on") or []:
+            print(f"Опирается на {dep}: {claims_by_id.get(dep, {}).get('text')}")
+        print("Что опирается на него:")
+        print_impact(pdir, rid)
+    elif rid in sources_by_id:
+        s = sources_by_id[rid]
+        print(f"{rid} · {s.get('kind')} · получен {s.get('retrieved')}")
+        print(f"{s.get('title')} — {s.get('ref')}" + (f" · копия: {s['local']}" if s.get("local") else ""))
+        used = [c for c in claims if any(r.get("id") == rid for r in c.get("sources") or [])]
+        print(f"Утверждений из этого источника: {len(used)}")
+        for c in used:
+            print(f"- {c['id']} ({c.get('type')}, {c.get('status')}): {c.get('text')}")
+    else:
+        d = next((d for d in decisions if d.get("id") == rid), None)
+        if not d:
+            raise Fail(f"{rid} не найдено ни в реестре, ни в источниках, ни в решениях.")
+        print(f"{rid} · {d.get('status')} · {d.get('date')}")
+        print(d.get("text"))
+        print(f"Ответственный: {d.get('owner') or '—'} · показатель: {d.get('metric') or '—'}")
+        print(f"Пересмотреть, если: {d.get('review_if') or '—'}")
+        for dep in d.get("based_on") or []:
+            c = claims_by_id.get(dep, {})
+            print(f"Основание {dep} ({c.get('type')}, {c.get('status')}): {c.get('text')}")
+
+
 def cmd_hook_edit(args):
     """Хук после правки файла: если это результат проекта, проверяет его сразу."""
     try:
@@ -705,6 +832,24 @@ def build_parser():
     s = sub.add_parser("cost", help="время и расходы")
     s.add_argument("project")
     s.set_defaults(fn=cmd_cost)
+
+    s = sub.add_parser("extract", help="перевести материал в текст с метками места")
+    s.add_argument("project")
+    s.add_argument("file", help="путь внутри папки проекта, например materials/отчёт.docx")
+    s.add_argument("--force", action="store_true", help="разобрать заново")
+    s.set_defaults(fn=cmd_extract)
+
+    s = sub.add_parser("find", help="поиск по реестру, источникам и решениям")
+    s.add_argument("project")
+    s.add_argument("words", nargs="+")
+    s.add_argument("--files", action="store_true", help="искать также в результатах и разобранных материалах")
+    s.add_argument("--limit", type=int, default=15)
+    s.set_defaults(fn=cmd_find)
+
+    s = sub.add_parser("show", help="карточка утверждения, источника или решения со связями")
+    s.add_argument("project")
+    s.add_argument("id")
+    s.set_defaults(fn=cmd_show)
 
     s = sub.add_parser("hook-edit", help="для хуков среды: проверка после правки файла")
     s.set_defaults(fn=cmd_hook_edit)

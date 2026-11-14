@@ -12,6 +12,15 @@ python3 tools/strateg.py status                 # все проекты и гд�
 python3 tools/strateg.py new podpiska           # создать проект
 python3 tools/strateg.py status podpiska        # шаг, следующее действие, счётчики, расходы
 
+# Материалы: перевести файл в текст с метками места
+python3 tools/strateg.py extract podpiska materials/отчёт.docx     # → materials/_text/отчёт.docx.txt, метки [абз. N]
+python3 tools/strateg.py extract podpiska materials/данные.xlsx    # → по одному CSV на лист, номер строки сохранён
+
+# Поиск и карточки
+python3 tools/strateg.py find podpiska удержание цена       # реестр, источники, решения; понимает формы слов
+python3 tools/strateg.py find podpiska конкурент --files    # ещё и результаты, и разобранные материалы
+python3 tools/strateg.py show podpiska E-012                # утверждение, его источники и всё, что на него опирается
+
 # Источники и утверждения
 python3 tools/strateg.py source podpiska --kind site --title "Тарифы X" --ref https://example.ru/t --local materials/x.html
 python3 tools/strateg.py claim podpiska --type fact --text "Тариф X — 299 ₽" --source "S-001:таблица, строка «Базовый»" --confidence high
@@ -56,7 +65,23 @@ python3 tools/strateg.py cost podpiska
 
 `step --done <шаг>` сам запускает проверку и не закрывает шаг при ошибках.
 
+## Какие материалы читает `extract`
+
+| Формат | Что получается | Метка места для реестра |
+|---|---|---|
+| Word `.docx` | текст и таблицы | `абз. 12`, `таблица 2, строка 3` |
+| Excel `.xlsx` | CSV на каждый лист | `лист «Отток», строка 7` |
+| PowerPoint `.pptx` | текст слайдов | `слайд 3` |
+| `.html` | текст страницы без скриптов | цитата |
+| `.csv`, `.tsv` | CSV в UTF-8 с запятой | номер строки |
+| `.pdf` | текст по страницам | `стр. 4` — нужен системный `pdftotext`; без него PDF читает сама среда |
+| `.txt`, `.md`, `.json` | текст в UTF-8 | номер строки |
+
+Границы: старые `.doc` и `.xls`, сканы без текстового слоя, изображения, аудио и видео скрипт не читает — их разбирает среда. Даты в Excel могут прийти числом. Исходный файл не меняется; результат лежит в `materials/_text/`.
+
 ## Защита от повторов
+
+- `extract` не разбирает файл заново, если он не менялся.
 
 - `source` с уже известной ссылкой возвращает прежний номер и не создаёт дубль.
 - `log --key <метка>`: если действие с этой меткой уже записано как успешное, команда отвечает «Уже выполнено» — повторять его не нужно. Неудачное действие (`--result error`) можно повторить.

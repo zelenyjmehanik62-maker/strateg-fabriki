@@ -265,6 +265,105 @@ class ReviewTests(Base):
         self.assertIn("Данные стареют", self.run_ok("review", "demo"))
 
 
+def make_zip(path, files):
+    import zipfile
+    with zipfile.ZipFile(path, "w") as z:
+        for name, text in files.items():
+            z.writestr(name, text)
+
+
+WNS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+SNS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+RNS = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+
+
+class ExtractTests(Base):
+    def mat(self, name):
+        return self.p / "materials" / name
+
+    def out(self, name):
+        return (self.p / "materials" / "_text" / name).read_text(encoding="utf-8")
+
+    def test_docx_paragraphs_and_table(self):
+        make_zip(self.mat("отчёт.docx"), {"word/document.xml": (
+            f'<w:document {WNS}><w:body>'
+            '<w:p><w:r><w:t>Удержание упало </w:t></w:r><w:r><w:t>на 5 п.п.</w:t></w:r></w:p>'
+            '<w:p></w:p>'
+            '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>Месяц</w:t></w:r></w:p></w:tc>'
+            '<w:tc><w:p><w:r><w:t>Отток</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+            '<w:p><w:r><w:t>Вывод</w:t></w:r></w:p></w:body></w:document>')})
+        self.run_ok("extract", "demo", "materials/отчёт.docx")
+        text = self.out("отчёт.docx.txt")
+        self.assertIn("[абз. 1] Удержание упало на 5 п.п.", text)
+        self.assertIn("[таблица 1, строка 1] Месяц | Отток", text)
+        self.assertIn("[абз. 2] Вывод", text)
+
+    def test_xlsx_sheets_keep_row_and_column_positions(self):
+        make_zip(self.mat("данные.xlsx"), {
+            "xl/workbook.xml": f'<workbook {SNS} {RNS}><sheets><sheet name="Отток" sheetId="1" r:id="rId1"/></sheets></workbook>',
+            "xl/_rels/workbook.xml.rels": '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                                          '<Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+            "xl/sharedStrings.xml": f'<sst {SNS}><si><t>Месяц</t></si><si><r><t>От</t></r><r><t>ток</t></r></si></sst>',
+            "xl/worksheets/sheet1.xml": f'<worksheet {SNS}><sheetData>'
+                                        '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c></row>'
+                                        '<row r="3"><c r="A3" t="inlineStr"><is><t>март</t></is></c><c r="C3"><v>4.5</v></c></row>'
+                                        '</sheetData></worksheet>'})
+        out = self.run_ok("extract", "demo", "materials/данные.xlsx")
+        self.assertIn("лист «Отток»", out)
+        self.assertEqual(self.out("данные.xlsx.лист1.csv").splitlines(), ["Месяц,Отток", "", "март,,4.5"])
+
+    def test_html_drops_scripts(self):
+        self.mat("сайт.html").write_text(
+            "<html><head><title>Тарифы</title><script>var x='секрет';</script></head>"
+            "<body><h1>Базовый</h1><p>299 &#8381; в месяц</p><table><tr><td>A</td><td>B</td></tr></table></body></html>",
+            encoding="utf-8")
+        self.run_ok("extract", "demo", "materials/сайт.html")
+        text = self.out("сайт.html.txt")
+        self.assertIn("299 ₽ в месяц", text)
+        self.assertIn("A | B", text)
+        self.assertNotIn("секрет", text)
+
+    def test_csv_cp1251_semicolons(self):
+        self.mat("выгрузка.csv").write_bytes("месяц;отток\nянварь;4,5\n".encode("cp1251"))
+        self.run_ok("extract", "demo", "materials/выгрузка.csv")
+        self.assertEqual(self.out("выгрузка.csv.csv").splitlines(), ["месяц,отток", 'январь,"4,5"'])
+
+    def test_repeat_is_skipped_and_bad_files_reported(self):
+        self.mat("a.txt").write_text("текст", encoding="utf-8")
+        self.run_ok("extract", "demo", "materials/a.txt")
+        self.assertIn("Уже разобран", self.run_ok("extract", "demo", "materials/a.txt"))
+        self.mat("битый.docx").write_text("это не архив", encoding="utf-8")
+        code, _, err = self.run_cmd("extract", "demo", "materials/битый.docx")
+        self.assertEqual(code, 1)
+        self.assertIn("повреждён", err)
+        self.mat("фото.png").write_bytes(b"\x89PNG")
+        code, _, err = self.run_cmd("extract", "demo", "materials/фото.png")
+        self.assertEqual(code, 1)
+        self.assertIn("не поддерживается", err)
+
+
+class FindTests(Base):
+    def test_find_matches_word_forms_and_show_links(self):
+        e1 = self.fact(text="Удержание 30-го дня упало до 22%")
+        h = self.run_ok("claim", "demo", "--type", "hypothesis", "--text", "Причина оттока — цена",
+                        "--based-on", e1).split()[0]
+        out = self.run_ok("find", "demo", "удержания")
+        self.assertIn(e1, out)
+        self.assertNotIn(h, out)
+        self.assertIn("Ничего не найдено", self.run_ok("find", "demo", "логистика"))
+        out = self.run_ok("show", "demo", e1)
+        self.assertIn("место: таблица тарифов", out)
+        self.assertIn(h, out)
+        self.assertIn(e1, self.run_ok("show", "demo", "S-001"))
+        code, _, _ = self.run_cmd("show", "demo", "E-404")
+        self.assertEqual(code, 1)
+
+    def test_find_in_files(self):
+        self.write("findings.md", "Конкуренты снижают цены (вывод).\n\n## Чего мы не знаем\n\n—\n")
+        self.assertIn("findings.md:1", self.run_ok("find", "demo", "конкурент", "--files"))
+        self.assertIn("Ничего не найдено", self.run_ok("find", "demo", "конкурент"))
+
+
 class HookTests(Base):
     def payload(self, name):
         return json.dumps({"tool_input": {"file_path": str(self.p / name)}})
