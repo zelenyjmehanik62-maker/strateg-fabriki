@@ -1,0 +1,12 @@
+{
+  "date": "2026-11-16",
+  "project": "polka",
+  "encoding": "UTF-8 (-X utf8)",
+  "commands": {
+    "check": 0,
+    "cost": 0,
+    "show": 0,
+    "metrics": 0
+  },
+  "note": "Read-only CLI commands. Not a new end-to-end agent run."
+}
