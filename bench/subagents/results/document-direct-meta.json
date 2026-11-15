@@ -1,0 +1,9 @@
+{
+  "exact_elapsed_time_seconds": null,
+  "exact_token_usage": null,
+  "exact_cost": null,
+  "exact_metrics_available": false,
+  "allowed_files": ["bench/subagents/cases/questions.json", "bench/subagents/cases/document.md"],
+  "expected_seen": false,
+  "notes": "Точные время, токены и стоимость недоступны. Временные метки полного интервала не фиксировались. expected.json и проверки expected не читались. Ответ сохранён без нового анализа и без изменения содержания; изменено только форматирование JSON."
+}

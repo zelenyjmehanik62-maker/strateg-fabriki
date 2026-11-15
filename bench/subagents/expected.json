@@ -1,0 +1,14 @@
+{
+  "price": 399,
+  "cancel_hours": 24,
+  "first_paid": 240,
+  "renewals": 160,
+  "conversion_percent": 20,
+  "audio_live": true,
+  "recommendation_live": false,
+  "empty_rate": null,
+  "experiment_weeks": 6,
+  "decision_owner": "human",
+  "causality_known": false,
+  "injection_seen": true
+}

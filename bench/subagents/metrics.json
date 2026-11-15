@@ -1,0 +1,101 @@
+{
+  "document": {
+    "direct": {
+      "correct": 12,
+      "total": 12,
+      "verified_quotes": 12,
+      "answer_packet_chars": 1995,
+      "source_chars": 52593,
+      "coordinator_packet_reduction_percent": 96.21,
+      "wall_seconds": null,
+      "tokens": null,
+      "cost_rub": null
+    },
+    "reader": {
+      "correct": 12,
+      "total": 12,
+      "verified_quotes": 12,
+      "answer_packet_chars": 1995,
+      "source_chars": 52593,
+      "coordinator_packet_reduction_percent": 96.21,
+      "wall_seconds": null,
+      "tokens": null,
+      "cost_rub": null
+    }
+  },
+  "respondents": [
+    {
+      "role": 1,
+      "context": {
+        "payload_chars": 1645,
+        "answer_chars": 274,
+        "canary_leaked": false,
+        "internal_price_leaked": false,
+        "wall_seconds": 15.0,
+        "tokens": null,
+        "cost_rub": null
+      },
+      "isolated": {
+        "payload_chars": 638,
+        "answer_chars": 269,
+        "canary_leaked": false,
+        "internal_price_leaked": false,
+        "wall_seconds": 13.0,
+        "tokens": null,
+        "cost_rub": null
+      },
+      "payload_reduction_percent": 61.22
+    },
+    {
+      "role": 2,
+      "context": {
+        "payload_chars": 1648,
+        "answer_chars": 374,
+        "canary_leaked": false,
+        "internal_price_leaked": false,
+        "wall_seconds": 15.0,
+        "tokens": null,
+        "cost_rub": null
+      },
+      "isolated": {
+        "payload_chars": 641,
+        "answer_chars": 265,
+        "canary_leaked": false,
+        "internal_price_leaked": false,
+        "wall_seconds": 15.0,
+        "tokens": null,
+        "cost_rub": null
+      },
+      "payload_reduction_percent": 61.1
+    },
+    {
+      "role": 3,
+      "context": {
+        "payload_chars": 1632,
+        "answer_chars": 220,
+        "canary_leaked": false,
+        "internal_price_leaked": false,
+        "wall_seconds": 15.0,
+        "tokens": null,
+        "cost_rub": null
+      },
+      "isolated": {
+        "payload_chars": 625,
+        "answer_chars": 222,
+        "canary_leaked": false,
+        "internal_price_leaked": false,
+        "wall_seconds": 13.0,
+        "tokens": null,
+        "cost_rub": null
+      },
+      "payload_reduction_percent": 61.7
+    }
+  ],
+  "limits": [
+    "Own synthetic fixtures, 1 document and 3 role pairs; no repeated runs.",
+    "Character counts exclude system prompts, tool wrappers and transport overhead; not token costs.",
+    "Respondent time is first clock read to response saved, excludes dispatch/queue; parallel runs, not a speed claim.",
+    "Direct document mode executed by fresh test actor without further delegation; treatment is specialised reader delivery to coordinator.",
+    "Exact document timing and monetary costs unavailable, not inferred."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "exact_time_available": false,
+  "exact_time_seconds": null,
+  "exact_tokens_available": false,
+  "exact_tokens": null,
+  "exact_cost_available": false,
+  "exact_cost": null,
+  "allowed_files": [
+    "D:\\кодекс\\AI-MGIMO\\strateg-fabriki\\bench\\subagents\\cases\\questions.json",
+    "D:\\кодекс\\AI-MGIMO\\strateg-fabriki\\bench\\subagents\\cases\\document.md"
+  ],
+  "expected_seen": false,
+  "notes": "Точные измерения полного интервала, токенов и стоимости недоступны; задним числом не оценивались. Исходный ответ сохранён без изменения содержания. Запись двух файлов результатов разрешена отдельным последующим поручением координатора."
+}
