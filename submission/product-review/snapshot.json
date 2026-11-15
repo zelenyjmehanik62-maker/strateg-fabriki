@@ -1,0 +1,78 @@
+{
+  "date_moscow": "2026-11-16",
+  "commit": "b91262a57b7f5444f8b4bfe49abe5d4e9b2d7d8c",
+  "projects": [
+    "polka"
+  ],
+  "knowledge_files": [
+    "strateg/knowledge/README.md"
+  ],
+  "check_polka": {
+    "code": 0,
+    "stdout": "внимание  options.md:3: цифра без ссылки на реестр\nвнимание  options.md:6: цифра без ссылки на реестр\nвнимание  options.md:27: цифра без ссылки на реестр\nвнимание  options.md:40: цифра без ссылки на реестр\nвнимание  options.md:52: цифра без ссылки на реестр\nвнимание  strategy-product.md:43: цифра без ссылки на реестр\nПроверка пройдена: источников 14, утверждений 96, замечаний 6.\n",
+    "stderr": ""
+  },
+  "cost_polka": {
+    "code": 0,
+    "stdout": "Проект polka: 23 действий\nВремя по отметкам журнала: 18 мин (от записи до записи, перерывы дольше 20 мин не считаются)\nВремя по оценке агента: 113 мин — это оценка труда, а не замер\nРасходы: 0 ₽ (измерено у 1 действий из 23)\n- Постановка: 4 действий; 0 ₽ (измерено у 1 действий из 4)\n- Материалы: 2 действий; расходы не измерены\n- Исследование: 2 действий; расходы не измерены\n- Варианты: 2 действий; расходы не измерены\n- Стратегии: 4 действий; расходы не измерены\n- Сопровождение: 9 действий; расходы не измерены\nИз расходов по оценке, а не по счёту: 0 ₽\nОшибок инструментов: 1\nВмешательств человека: 0\n",
+    "stderr": ""
+  },
+  "scope": "No access to secret values or real interview recordings; no full end-to-end new-session test.",
+  "unsupported_claim_probe": {
+    "source_text": "Учебный источник. Размер рынка неизвестен. Данных о 900 млрд рублей здесь нет.\n",
+    "records": [
+      {
+        "args": [
+          "new",
+          "proof-gap"
+        ],
+        "code": 0,
+        "stdout": "Проект «proof-gap» создан: D:\\кодекс\\AI-MGIMO\\t22-proof-w7eh_oxw\\proof-gap\nШаг 1 — Постановка. Материалы пользователя кладите в materials/.\n",
+        "stderr": ""
+      },
+      {
+        "args": [
+          "source",
+          "proof-gap",
+          "--kind",
+          "doc",
+          "--title",
+          "Собственный источник для проверки",
+          "--ref",
+          "materials/source.txt",
+          "--local",
+          "materials/source.txt"
+        ],
+        "code": 0,
+        "stdout": "S-001\n",
+        "stderr": ""
+      },
+      {
+        "args": [
+          "claim",
+          "proof-gap",
+          "--type",
+          "fact",
+          "--text",
+          "Размер рынка составляет 900 млрд рублей",
+          "--source",
+          "S-001:строка 1"
+        ],
+        "code": 0,
+        "stdout": "E-001\n",
+        "stderr": ""
+      },
+      {
+        "args": [
+          "check",
+          "proof-gap"
+        ],
+        "code": 0,
+        "stdout": "Проверка пройдена: источников 1, утверждений 1, замечаний 0.\n",
+        "stderr": ""
+      }
+    ],
+    "accepted": true,
+    "meaning": "Structural check accepts an unsupported fact with an existing source ID and arbitrary location. It does not verify entailment."
+  }
+}
