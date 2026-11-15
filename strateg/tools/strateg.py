@@ -154,7 +154,9 @@ def clock_minutes(rows):
 
 
 def money_line(rows):
-    measured = [r for r in rows if r.get("cost_rub") is not None]
+    # Ноль «по оценке» — это не замер: так агент раньше отмечал, что не знает расхода.
+    measured = [r for r in rows if r.get("cost_rub") is not None
+                and not (float(r["cost_rub"]) == 0 and r.get("cost_basis") != "точно")]
     if not measured:
         return "расходы не измерены"
     text = f"{sum(float(r['cost_rub']) for r in measured):g} ₽"
@@ -629,7 +631,7 @@ def cmd_cost(args):
             print(f"- {STEP_NAMES[step]}: {len(part)} действий; {money_line(part)}")
     estimated = sum(float(r.get("cost_rub") or 0) for r in rows if r.get("cost_basis") != "точно")
     print(f"Из расходов по оценке, а не по счёту: {estimated:g} ₽")
-    if all(r.get("cost_rub") is None for r in rows):
+    if money_line(rows) == "расходы не измерены":
         print("Чтобы узнать расходы, возьмите цифру из своей среды (например, счётчик расхода в Claude Code) "
               "и запишите: log <проект> --action \"расход за сеанс\" --tool среда --cost <рубли> --basis точно")
     print(f"Ошибок инструментов: {sum(1 for r in rows if r.get('result') == 'error')}")

@@ -228,6 +228,9 @@ class StateTests(Base):
         rows = [{"ts": "2026-11-14T10:00:00+03:00"}, {"ts": "2026-11-14T10:07:00+03:00"},
                 {"ts": "2026-11-14T13:00:00+03:00"}, {"ts": "2026-11-14T13:05:00+03:00"}]
         self.assertEqual(strateg.clock_minutes(rows), 12)
+        # ноль «по оценке» — не замер
+        self.assertEqual(strateg.money_line([{"cost_rub": 0, "cost_basis": "оценка"}]), "расходы не измерены")
+        self.assertEqual(strateg.money_line([{"cost_rub": 0, "cost_basis": "точно"}]), "0 ₽")
 
 
 class ImpactTests(Base):
