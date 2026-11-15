@@ -37,4 +37,4 @@
 2. Откройте в среде папку `strateg/` — именно её, а не корень репозитория.
 3. Напишите агенту свой вопрос. Для пробы возьмите текст из `strateg/examples/polka/запрос.md`.
 
-Готовый пример результата — `strateg/projects/polka/`, сравнение с обычным чатом — `bench/comparison.md`.
+Готовый пример результата — `strateg/projects/polka/`, сравнение с обычным чатом — `bench/comparison.md`, ключевые решения и границы — [strateg/DECISIONS.md](strateg/DECISIONS.md).
