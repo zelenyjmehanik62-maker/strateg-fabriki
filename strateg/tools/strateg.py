@@ -914,4 +914,9 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
+    # CLI outputs Unicode (including ₽) even when Windows pipes default to cp1251.
+    # Do not change a host application's streams when imported as a module.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     sys.exit(main())

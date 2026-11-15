@@ -3,6 +3,7 @@ import contextlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -50,6 +51,48 @@ class Base(unittest.TestCase):
 
     def write(self, name, text):
         (self.p / name).write_text(text, encoding="utf-8")
+
+
+class CliEncodingTests(Base):
+    def cli(self, *argv):
+        env = os.environ.copy()
+        env.update(PYTHONUTF8="0", PYTHONIOENCODING="cp1251:strict")
+        return subprocess.run(
+            [sys.executable, "-X", "utf8=0", str(Path(strateg.__file__)), *argv],
+            env=env, capture_output=True,
+        )
+
+    def test_cost_and_show_emit_utf8_under_cp1251(self):
+        eid = self.fact(text="Тариф стоит 299 ₽; значок книги 📚")
+        for argv, expected in [
+            (("cost", "demo"), "₽"),
+            (("show", "demo", eid), "Тариф стоит 299 ₽; значок книги 📚"),
+        ]:
+            with self.subTest(command=argv[0]):
+                result = self.cli(*argv)
+                self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8"))
+                self.assertIn(expected, result.stdout.decode("utf-8"))
+
+    def test_error_output_is_utf8_under_cp1251(self):
+        result = self.cli("status", "проект-₽-📚")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("проект-₽-📚", result.stderr.decode("utf-8"))
+        self.assertNotIn(b"UnicodeEncodeError", result.stderr)
+
+    def test_import_does_not_reconfigure_host_stream(self):
+        env = os.environ.copy()
+        env.update(PYTHONUTF8="0", PYTHONIOENCODING="cp1251:strict")
+        code = (
+            "import sys; "
+            f"sys.path.insert(0, {str(Path(strateg.__file__).parent)!r}); "
+            "import strateg; print(sys.stdout.encoding)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-X", "utf8=0", "-c", code],
+            env=env, capture_output=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), b"cp1251")
 
 
 class RegistryTests(Base):
