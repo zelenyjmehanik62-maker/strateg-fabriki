@@ -722,6 +722,28 @@ class UsageTests(Base):
         self.assertEqual(self.run_cmd("usage", str(self.p / "нет.jsonl"))[0], 1)
 
 
+    def test_usage_counts_environment_web_tools(self):
+        """T33: поиск и страницы инструментами среды идут отдельными запросами — считаем по вызовам."""
+        rows = [
+            {"type": "assistant", "timestamp": "2026-11-17T10:00:00Z", "message": {
+                "id": "m1", "model": "claude-opus-5-5", "usage": {"input_tokens": 0, "output_tokens": 0},
+                "content": [{"type": "tool_use", "id": "t1", "name": "WebSearch", "input": {}},
+                            {"type": "tool_use", "id": "t2", "name": "WebSearch", "input": {}},
+                            {"type": "tool_use", "id": "t3", "name": "WebFetch", "input": {}}]}},
+            {"type": "user", "timestamp": "2026-11-17T10:00:05Z", "toolUseResult": {"searchCount": 3},
+             "message": {"content": [{"type": "tool_result", "tool_use_id": "t1"}]}},
+            {"type": "user", "timestamp": "2026-11-17T10:00:06Z",
+             "message": {"content": [{"type": "tool_result", "tool_use_id": "t2"}]}},
+        ]
+        path = self.p / "web.jsonl"
+        path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        import usage as us
+        s = us.summarize([path])
+        self.assertEqual(s["tools"], {"search_calls": 2, "searches": 4, "fetches": 1})
+        self.assertAlmostEqual(s["total_usd"], 0.04, places=6)  # 4 поиска × $10 / 1000
+        self.assertIn("не измерены", us.report(s))
+
+
 class PiiTests(Base):
     """T28: персональные данные не должны попасть в файлы проекта, кроме materials/private/."""
 

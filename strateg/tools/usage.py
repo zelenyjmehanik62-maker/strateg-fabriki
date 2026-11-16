@@ -4,6 +4,11 @@ Claude Code пишет журнал каждого сеанса в JSONL; у к�
 обычный ввод, запись в кэш, чтение из кэша, вывод, поисковые запросы. Здесь они суммируются
 и умножаются на публичные цены API из prices.json.
 
+Поиск и загрузка страниц инструментами среды (WebSearch, WebFetch в Claude Code) идут отдельными
+запросами, которых нет в `usage` ответа модели. Их считаем по вызовам инструментов: поиски — по
+`searchCount` в результате (нет его — один поиск на вызов) и по цене поиска из прайс-листа; токены
+обработки страниц в журнал не попадают и называются неизмеренными.
+
 Это стоимость **по прайс-листу**: столько стоил бы прогон, если бы шёл через API по публичным
 ценам. На подписке пользователь платит не за токены, на договорных ценах — иначе.
 """
@@ -30,6 +35,8 @@ def parse(paths):
     """Сводит ответы модели из одного или нескольких журналов. Один ответ может быть записан
     несколькими строками (по блокам содержимого) — берём последнюю запись на каждый id."""
     responses, stamps = {}, []
+    tools = {"search_calls": 0, "searches": 0, "fetches": 0}
+    pending = {}
     for path in paths:
         for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
             try:
@@ -43,9 +50,29 @@ def parse(paths):
                 except ValueError:
                     pass
             msg = rec.get("message")
-            if rec.get("type") == "assistant" and isinstance(msg, dict) and msg.get("usage"):
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content") if isinstance(msg.get("content"), list) else []
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use" and block.get("name") in ("WebSearch", "WebFetch") \
+                        and block.get("id") not in pending:
+                    pending[block.get("id")] = block["name"]
+                    if block["name"] == "WebSearch":
+                        tools["search_calls"] += 1
+                        tools["searches"] += 1
+                    else:
+                        tools["fetches"] += 1
+                elif block.get("type") == "tool_result" and pending.get(block.get("tool_use_id")) == "WebSearch":
+                    result = rec.get("toolUseResult")
+                    count = result.get("searchCount") if isinstance(result, dict) else None
+                    if isinstance(count, int) and count != 1:
+                        tools["searches"] += count - 1
+                    pending[block.get("tool_use_id")] = "WebSearch:done"
+            if rec.get("type") == "assistant" and msg.get("usage"):
                 responses[msg.get("id") or f"{path}:{len(responses)}"] = msg
-    return list(responses.values()), sorted(stamps)
+    return list(responses.values()), sorted(stamps), tools
 
 
 def active_minutes(stamps):
@@ -59,7 +86,7 @@ def active_minutes(stamps):
 
 def summarize(paths, prices=None):
     prices = prices or load_prices()
-    responses, stamps = parse(paths)
+    responses, stamps, tools = parse(paths)
     by_model, unknown = {}, set()
     for msg in responses:
         u = msg["usage"]
@@ -91,11 +118,13 @@ def summarize(paths, prices=None):
                     + read * read_price + out * base_out) / 1_000_000
             cost += searches * prices["web_search_per_1000"] / 1000
             row["cost"] += cost
-    total = sum(r["cost"] for r in by_model.values())
+    tool_search_cost = tools["searches"] * prices["web_search_per_1000"] / 1000
+    total = sum(r["cost"] for r in by_model.values()) + tool_search_cost
     wall = (stamps[-1] - stamps[0]).total_seconds() / 60 if len(stamps) > 1 else 0.0
     return {"by_model": by_model, "total_usd": total, "unknown_models": sorted(m for m in unknown if m),
             "wall_minutes": wall, "active_minutes": active_minutes(stamps), "responses": len(responses),
-            "prices_date": prices.get("date"), "usd_rub": prices.get("usd_rub")}
+            "prices_date": prices.get("date"), "usd_rub": prices.get("usd_rub"),
+            "tools": tools, "tool_search_usd": tool_search_cost}
 
 
 def report(s):
@@ -105,6 +134,11 @@ def report(s):
         lines.append(f"- {model}: ответов {r['responses']}; ввод {r['input']:,}, запись в кэш {r['cache_write_5m'] + r['cache_write_1h']:,}, "
                      f"чтение из кэша {r['cache_read']:,}, вывод {r['output']:,} токенов; поисков {r['web_search']}; "
                      f"≈ ${r['cost']:.2f}".replace(",", " "))
+    t = s.get("tools") or {}
+    if t.get("search_calls") or t.get("fetches"):
+        lines.append(f"- поиск и страницы инструментами среды: поисков {t['searches']} (≈ ${s['tool_search_usd']:.2f} по цене поиска), "
+                     f"загрузок страниц {t['fetches']}; токены, которые среда тратит на обработку результатов поиска и страниц, "
+                     "в журнал не попадают — не измерены: итог ниже включает цену поисков, но не эти токены")
     rub = f" ≈ {s['total_usd'] * s['usd_rub']:.0f} ₽" if s.get("usd_rub") else ""
     lines.append(f"Итого по прайс-листу на {s['prices_date']}: ${s['total_usd']:.2f}{rub}. "
                  "Это цена прогона через API по публичным ценам, а не счёт подписки.")
