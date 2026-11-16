@@ -35,7 +35,7 @@ strateg/projects/<проект>/
   journal.jsonl       что сделано, сколько времени и денег
 ```
 
-`<проект>` — латиница, цифры и дефисы: `demo-megafon`, `probny-podpiska`.
+`<проект>` — латиница, цифры и дефисы: `demo`, `probny-podpiska`.
 
 ## 3. Источник — строка `sources.jsonl`
 
@@ -80,7 +80,7 @@ strateg/projects/<проект>/
 ## 7. Состояние — `state.json`
 
 ```json
-{"project": "demo-megafon", "step": "research", "done": ["frame", "collect"], "waiting_for_user": null, "next_action": "сопоставить S-003 и S-007 по ценам", "open_questions": [], "updated": "2026-11-15T14:20:00+03:00"}
+{"project": "demo", "step": "research", "done": ["frame", "collect"], "waiting_for_user": null, "next_action": "сопоставить S-003 и S-007 по ценам", "open_questions": [], "updated": "2026-11-15T14:20:00+03:00"}
 ```
 
 Шаги по порядку: `frame` (постановка) → `collect` (материалы) → `research` (исследование) → `options` (варианты) → `strategy` (стратегии и план проверки) → `follow` (сопровождение после решения).
