@@ -257,6 +257,13 @@ class StateTests(Base):
         self.assertIn("- demo: учебный пример", out)
         self.assertLess(out.index("- own:"), out.index("Готовые примеры"))
 
+    def test_done_clears_stale_waiting(self):
+        self.write("brief.md", "# Постановка\n\nПочему падает удержание?\n")
+        self.run_ok("step", "demo", "--waiting", "подтверждение постановки")
+        self.run_ok("step", "demo", "--done", "frame")
+        st = json.loads((self.p / "state.json").read_text(encoding="utf-8"))
+        self.assertIsNone(st["waiting_for_user"])
+
     def test_resume_shows_next_action(self):
         self.run_ok("step", "demo", "--next", "сопоставить S-001 и S-002 по ценам", "--waiting", "доступ к таблице")
         out = self.run_ok("status", "demo")

@@ -570,6 +570,8 @@ def cmd_step(args):
             raise Fail(f"Шаг «{STEP_NAMES[done]}» не закрыт: сначала исправьте ошибки проверки.")
         if done not in st["done"]:
             st["done"].append(done)
+        if args.waiting is None:
+            st["waiting_for_user"] = None  # ожидание относилось к закрытому шагу
         idx = STEPS.index(done)
         if st["step"] == done and idx + 1 < len(STEPS):
             st["step"] = STEPS[idx + 1]
