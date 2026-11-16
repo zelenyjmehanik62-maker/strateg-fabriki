@@ -107,6 +107,7 @@ python3 tools/strateg.py show polka E-012
 python3 tools/strateg.py status          # все проекты и где остановился каждый
 python3 tools/strateg.py check polka     # проверка: факты с источниками, гипотезы не выданы за факты
 python3 tools/strateg.py review polka    # какие решения пора пересмотреть
+python3 tools/strateg.py vet polka-fast  # сверены ли по смыслу факты, на которых стоят выводы
 python3 tools/strateg.py cost polka      # время и расходы
 ```
 

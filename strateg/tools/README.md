@@ -25,7 +25,10 @@ python3 tools/strateg.py show podpiska E-012                # утвержден
 
 # Источники и утверждения
 python3 tools/strateg.py source podpiska --kind site --title "Тарифы X" --ref https://example.ru/t --local materials/x.html
-python3 tools/strateg.py claim podpiska --type fact --text "Тариф X — 299 ₽" --source "S-001:таблица, строка «Базовый»" --confidence high
+python3 tools/strateg.py claim podpiska --type fact --text "Тариф X — 299 ₽" --source "S-001:таблица, строка «Базовый»" --quote "Базовый — 299 ₽ в месяц" --confidence high
+python3 tools/strateg.py claim podpiska --type fact --text "У купонов платят 11% пробных" --source "S-003:лист «Каналы»" --calc calc/out/channels.txt
+python3 tools/strateg.py vet podpiska                       # критичные факты без смысловой сверки — карточки для сверщика
+python3 tools/strateg.py vet podpiska E-012 --verdict partial --by helper --note "в источнике март, а не весь год"
 python3 tools/strateg.py claim podpiska --type hypothesis --text "Цена — главный барьер" --based-on E-001
 python3 tools/strateg.py claim podpiska --type fact --text "Тариф X — 349 ₽" --source "S-004:новая таблица" --supersedes E-001
 python3 tools/strateg.py revoke podpiska E-001 --reason "источник устарел"
@@ -56,6 +59,9 @@ python3 tools/strateg.py cost podpiska
 ## Что не пропустит `check`
 
 - факт без источника или без указания места в источнике;
+- факт из материала без дословной цитаты или расчёта (при записи); цитату, которой нет в тексте источника; число из утверждения, которого нет ни в цитате, ни в расчёте;
+- факт, который смысловая сверка признала неподтверждённым (`vet … --verdict no`), пока его не отозвали;
+- при закрытии шагов «Варианты» и «Стратегии» — критичный факт без цитаты или без смысловой сверки;
 - факт, который опирается на ответ модельного респондента;
 - ссылку `[E-…]` на несуществующее, отозванное или заменённое утверждение;
 - строку, где гипотеза или прогноз поданы как факт (нет слов «гипотеза», «предположительно», «прогноз», «по оценке», «вероятно», «возможно»);

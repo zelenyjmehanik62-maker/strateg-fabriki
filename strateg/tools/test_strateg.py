@@ -44,10 +44,10 @@ class Base(unittest.TestCase):
     def source(self, kind="site", ref="https://example.ru/a"):
         return self.run_ok("source", "demo", "--kind", kind, "--title", "Источник", "--ref", ref).split()[0]
 
-    def fact(self, text="Тариф стоит 299 ₽", sid=None):
+    def fact(self, text="Тариф стоит 299 ₽", sid=None, quote=None):
         sid = sid or self.source()
         return self.run_ok("claim", "demo", "--type", "fact", "--text", text,
-                           "--source", f"{sid}:таблица тарифов").split()[0]
+                           "--source", f"{sid}:таблица тарифов", "--quote", quote or text).split()[0]
 
     def write(self, name, text):
         (self.p / name).write_text(text, encoding="utf-8")
@@ -138,7 +138,8 @@ class RegistryTests(Base):
         sid = self.source()
         old = self.fact(sid=sid)
         new = self.run_ok("claim", "demo", "--type", "fact", "--text", "Тариф стоит 349 ₽",
-                          "--source", f"{sid}:новая таблица", "--supersedes", old).split()[0]
+                          "--source", f"{sid}:новая таблица", "--quote", "Тариф стоит 349 ₽",
+                          "--supersedes", old).split()[0]
         rows = [json.loads(l) for l in (self.p / "evidence.jsonl").read_text(encoding="utf-8").splitlines()]
         self.assertEqual(rows[0]["status"], "superseded")
         self.assertEqual(rows[0]["superseded_by"], new)
@@ -332,7 +333,7 @@ class ReviewTests(Base):
         self.assertIn("конверсия ниже 2%", out)
         self.assertNotIn("Решать сейчас", out)
         self.run_ok("claim", "demo", "--type", "fact", "--text", "Тариф стоит 349 ₽",
-                    "--source", f"{sid}:новая таблица", "--supersedes", e1)
+                    "--source", f"{sid}:новая таблица", "--quote", "Тариф стоит 349 ₽", "--supersedes", e1)
         out = self.run_ok("review", "demo")
         self.assertIn("Решать сейчас", out)
         self.assertIn(f"основание {e1} заменено на E-003", out)
@@ -447,6 +448,121 @@ class FindTests(Base):
         self.write("findings.md", "Конкуренты снижают цены (вывод).\n\n## Чего мы не знаем\n\n—\n")
         self.assertIn("findings.md:1", self.run_ok("find", "demo", "конкурент", "--files"))
         self.assertIn("Ничего не найдено", self.run_ok("find", "demo", "конкурент"))
+
+
+class GroundingTests(Base):
+    """T24: факт должен опираться на дословную цитату, а критичный — пройти смысловую сверку."""
+
+    def doc_source(self, text, name="source.md"):
+        (self.p / "materials" / name).write_text(text, encoding="utf-8")
+        return self.run_ok("source", "demo", "--kind", "doc", "--title", "Документ", "--ref",
+                           f"materials/{name}", "--local", f"materials/{name}").split()[0]
+
+    def test_fact_without_quote_is_rejected(self):
+        sid = self.doc_source("Отток составил 4,5% в месяц в марте 2026 года.\n")
+        code, _, err = self.run_cmd("claim", "demo", "--type", "fact", "--text", "Отток 4,5% в месяц",
+                                    "--source", f"{sid}:строка 1")
+        self.assertEqual(code, 1)
+        self.assertIn("дословной цитатой", err)
+
+    def test_quote_must_be_found_in_source(self):
+        sid = self.doc_source("Отток составил 4,5% в месяц в марте 2026 года.\n")
+        code, _, err = self.run_cmd("claim", "demo", "--type", "fact", "--text", "Отток 6% в месяц",
+                                    "--source", f"{sid}:строка 1", "--quote", "Отток составил 6% в месяц")
+        self.assertEqual(code, 1)
+        self.assertIn("не найдена в тексте источника", err)
+        # пробелы, регистр, кавычки и ё не мешают найти настоящий фрагмент
+        out = self.run_ok("claim", "demo", "--type", "fact", "--text", "Отток в марте 2026 — 4,5% в месяц",
+                          "--source", f"{sid}:строка 1", "--quote", "отток  составил 4,5 % в месяц в МАРТЕ 2026")
+        self.assertTrue(out.startswith("E-"))
+
+    def test_number_absent_from_quote_is_rejected(self):
+        sid = self.doc_source("Выручка выросла, но точных цифр в отчёте нет. Подписчиков около 31 тысячи.\n")
+        code, _, err = self.run_cmd("claim", "demo", "--type", "fact", "--text", "Подписчиков 45 тысяч",
+                                    "--source", f"{sid}:абз. 1", "--quote", "Подписчиков около 31 тысячи")
+        self.assertEqual(code, 1)
+        self.assertIn("числа 45", err)
+
+    def test_quote_found_in_extracted_table(self):
+        (self.p / "materials" / "data.csv").write_text("канал;пробные;оплатили\nкупоны;7300;803\n", encoding="utf-8")
+        self.run_ok("extract", "demo", "materials/data.csv")
+        sid = self.run_ok("source", "demo", "--kind", "table", "--title", "Каналы", "--ref", "materials/data.csv",
+                          "--local", "materials/data.csv").split()[0]
+        out = self.run_ok("claim", "demo", "--type", "fact", "--text", "Купоны: 7300 пробных, 803 оплатили",
+                          "--source", f"{sid}:строка 2", "--quote", "купоны 7300 803")
+        self.assertTrue(out.startswith("E-"))
+
+    def test_calc_supports_computed_number(self):
+        sid = self.doc_source("купоны: 7300 пробных, 803 оплатили\n")
+        (self.p / "calc").mkdir()
+        (self.p / "calc" / "out.txt").write_text("доля оплативших у купонов: 11.0%\n", encoding="utf-8")
+        code, _, err = self.run_cmd("claim", "demo", "--type", "fact", "--text", "У купонов платят 11% пробных",
+                                    "--source", f"{sid}:строка 1", "--calc", "calc/missing.txt")
+        self.assertEqual(code, 1)
+        self.assertIn("не найден", err)
+        self.run_ok("claim", "demo", "--type", "fact", "--text", "У купонов платят 11% пробных",
+                    "--source", f"{sid}:строка 1", "--calc", "calc/out.txt")
+
+    def test_user_words_need_no_quote(self):
+        sid = self.run_ok("source", "demo", "--kind", "user", "--title", "Слова руководителя",
+                          "--ref", "беседа").split()[0]
+        self.run_ok("claim", "demo", "--type", "fact", "--text", "Бюджет — 3 млн ₽", "--source", f"{sid}:ответ 2")
+        e = "E-001"
+        self.write("options.md", f"## Вариант A. Оставить как есть\n\nБюджет 3 млн [{e}].\n\nВозражение: мало (вывод).\n\n"
+                                 "## Вариант B. Рост\n\n## Вариант C. Закрыть направление\n")
+        self.assertIn("Все критичные факты сверены", self.run_ok("vet", "demo"))
+
+    def test_nika_probe_true_quote_false_meaning(self):
+        """Опыт Ники (docs/review/check_snapshot.py): источник прямо говорит, что данных нет."""
+        sid = self.doc_source("Учебный источник. Размер рынка неизвестен. Данных о 900 млрд рублей здесь нет.\n")
+        # выдумать цитату нельзя
+        code, _, err = self.run_cmd("claim", "demo", "--type", "fact", "--text", "Размер рынка составляет 900 млрд рублей",
+                                    "--source", f"{sid}:строка 1", "--quote", "Размер рынка составляет 900 млрд рублей")
+        self.assertEqual(code, 1)
+        # настоящая цитата с тем же числом механически проходит — смысл противоположный
+        e = self.run_ok("claim", "demo", "--type", "fact", "--text", "Размер рынка составляет 900 млрд рублей",
+                        "--source", f"{sid}:строка 1", "--quote", "Данных о 900 млрд рублей здесь нет").split()[0]
+        self.write("options.md", f"## Вариант A. Оставить как есть\n\nРынок 900 млрд рублей [{e}].\n\nВозражение: нет (вывод).\n\n"
+                                 "## Вариант B. Рост\n\n## Вариант C. Закрыть направление\n")
+        # пока факт критичный и не сверен, шаг «Варианты» не закрывается
+        self.run_ok("step", "demo", "--set", "options")
+        code, out, err = self.run_cmd("step", "demo", "--done", "options")
+        self.assertEqual(code, 1)
+        self.assertIn("не прошёл смысловую сверку", out)
+        self.assertIn(e, self.run_ok("vet", "demo"))
+        # сверка находит противоречие — и проверка не пропустит факт, пока его не отзовут
+        code, _, err = self.run_cmd("vet", "demo", e, "--verdict", "no")
+        self.assertEqual(code, 1)
+        self.assertIn("--note", err)
+        self.run_ok("vet", "demo", e, "--verdict", "no", "--by", "helper", "--note", "источник говорит, что данных нет")
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertEqual(code, 1)
+        self.assertIn("не подтверждает факт", out)
+        self.run_ok("revoke", "demo", e, "--reason", "источник не подтверждает")
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertIn(f"ссылка на отозванное {e}", out)
+
+    def test_vetted_critical_fact_lets_step_close(self):
+        sid = self.doc_source("Отток составил 4,5% в месяц в марте 2026 года.\n")
+        e = self.run_ok("claim", "demo", "--type", "fact", "--text", "Отток 4,5% в месяц, март 2026",
+                        "--source", f"{sid}:строка 1", "--quote", "Отток составил 4,5% в месяц в марте 2026").split()[0]
+        self.write("options.md", f"## Вариант A. Оставить как есть\n\nОтток 4,5% [{e}].\n\nВозражение: растёт (вывод).\n\n"
+                                 "## Вариант B. Рост\n\n## Вариант C. Закрыть направление\n")
+        self.run_ok("step", "demo", "--set", "options")
+        self.run_ok("vet", "demo", e, "--verdict", "supports", "--by", "helper")
+        self.run_ok("step", "demo", "--done", "options")
+        self.assertIn("Смысловая сверка: подтверждает", self.run_ok("show", "demo", e))
+        self.assertIn("Все критичные факты сверены", self.run_ok("vet", "demo"))
+
+    def test_changed_source_breaks_quote(self):
+        sid = self.doc_source("Отток составил 4,5% в месяц.\n")
+        self.run_ok("claim", "demo", "--type", "fact", "--text", "Отток 4,5% в месяц",
+                    "--source", f"{sid}:строка 1", "--quote", "Отток составил 4,5% в месяц")
+        self.assertEqual(self.run_cmd("check", "demo")[0], 0)
+        (self.p / "materials" / "source.md").write_text("Отток составил 6% в месяц.\n", encoding="utf-8")
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertEqual(code, 1)
+        self.assertIn("цитата не найдена", out)
 
 
 class HookTests(Base):

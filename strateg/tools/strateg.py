@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import grounding as gr  # noqa: E402
 
 STEPS = ["frame", "collect", "research", "options", "strategy", "follow"]
 STEP_NAMES = {
@@ -200,6 +201,13 @@ def cmd_status(args):
         print(f"Открытый вопрос: {q}")
     print(f"Источников: {len(sources)} · утверждений: фактов {by_type['fact']}, гипотез {by_type['hypothesis']}, "
           f"прогнозов {by_type['forecast']}, синтетических {by_type['synthetic']} · решений: {len(decisions)}")
+    by_id = {c["id"]: c for c in claims}
+    crit = gr.critical_ids(pdir, by_id, decisions)
+    src_by_id = {x["id"]: x for x in sources}
+    unvet = sum(1 for i in crit if by_id[i].get("type") == "fact" and by_id[i].get("status") == "active"
+                and not by_id[i].get("vet") and gr.needs_quote(by_id[i], src_by_id))
+    if unvet:
+        print(f"Критичных фактов без смысловой сверки: {unvet} (vet {st['project']})")
     print(f"Потрачено: {clock_minutes(rows)} мин по отметкам журнала; {money_line(rows)}")
     if rows:
         print("Последние действия:")
@@ -274,7 +282,22 @@ def cmd_claim(args):
            "sources": [parse_source_arg(s) for s in args.source or []],
            "based_on": split_ids(args.based_on), "confidence": args.confidence,
            "status": "active", "supersedes": args.supersedes, "added": now()[:10]}
-    problems = validate_claim(row, {s["id"]: s for s in sources}, by_id)
+    if args.quote:
+        row["quote"] = args.quote.strip()
+    if args.calc:
+        row["calc"] = args.calc.strip()
+    sources_by_id = {s["id"]: s for s in sources}
+    problems = validate_claim(row, sources_by_id, by_id)
+    notes = []
+    if not problems and gr.needs_quote(row, sources_by_id):
+        if not row.get("quote") and not row.get("calc"):
+            problems.append("факт из материала нужно подкрепить дословной цитатой (--quote \"…\") "
+                            "или файлом расчёта (--calc calc/out/…) — пересказ источника фактом не считается")
+        else:
+            errs, notes, checked = gr.ground(pdir, row, sources_by_id)
+            problems += errs
+            if checked is not None:
+                row["quote_checked"] = checked
     if problems:
         raise Fail("Утверждение не записано:\n- " + "\n- ".join(problems))
     if args.supersedes:
@@ -284,9 +307,71 @@ def cmd_claim(args):
     else:
         append_jsonl(path, row)
     print(row["id"])
+    for n in notes:
+        print(f"внимание  {n}")
     if args.supersedes:
         print(f"{args.supersedes} заменено. Что затронуто:")
         print_impact(pdir, args.supersedes)
+
+
+def vet_card(pdir, c, sources_by_id):
+    lines = [f"{c['id']} · {c.get('text')}"]
+    for ref in c.get("sources") or []:
+        src = sources_by_id.get(ref.get("id"), {})
+        local = f" · копия: {src['local']}" if src.get("local") else ""
+        lines.append(f"  источник {ref.get('id')}: {src.get('title')} · место: {ref.get('where') or '—'}{local}")
+        if src.get("local"):
+            texts = sorted((pdir / "materials" / "_text").glob(Path(src["local"]).name + ".*"))
+            if texts:
+                lines.append("  текст для чтения: " + ", ".join(str(t.relative_to(pdir)) for t in texts))
+    if c.get("quote"):
+        lines.append(f"  цитата: «{c['quote']}»")
+    if c.get("calc"):
+        lines.append(f"  расчёт: {c['calc']}")
+    return "\n".join(lines)
+
+
+def cmd_vet(args):
+    pdir = project_dir(args.project)
+    path = pdir / "evidence.jsonl"
+    claims, _ = read_jsonl(path)
+    sources, _ = read_jsonl(pdir / "sources.jsonl")
+    decisions, _ = read_jsonl(pdir / "decisions.jsonl")
+    sources_by_id = {s["id"]: s for s in sources}
+    by_id = {c["id"]: c for c in claims}
+    if not args.id:
+        crit = gr.critical_ids(pdir, by_id, decisions)
+        todo = [by_id[i] for i in sorted(crit, key=lambda x: int(x.split("-")[1]))
+                if by_id[i].get("type") == "fact" and by_id[i].get("status") == "active" and not by_id[i].get("vet")
+                and gr.needs_quote(by_id[i], sources_by_id)]
+        if not todo:
+            print("Все критичные факты сверены.")
+            return
+        print(f"Критичных фактов без смысловой сверки: {len(todo)}. Для каждого: подтверждает ли цитата "
+              "(или место в источнике) именно это утверждение?")
+        for c in todo:
+            print(vet_card(pdir, c, sources_by_id))
+        return
+    c = by_id.get(args.id)
+    if not c:
+        raise Fail(f"{args.id} нет в реестре.")
+    if c.get("type") != "fact":
+        raise Fail(f"{args.id} — не факт ({c.get('type')}): смысловая сверка нужна только фактам.")
+    if not args.verdict:
+        print(vet_card(pdir, c, sources_by_id))
+        if c.get("vet"):
+            v = c["vet"]
+            print(f"  сверка: {gr.VERDICTS[v['verdict']]} ({v.get('by')}, {v.get('date')}) {v.get('note') or ''}")
+        return
+    if args.verdict != "supports" and not (args.note or "").strip():
+        raise Fail("Объясните в --note, чего именно не хватает или что противоречит.")
+    c["vet"] = {"verdict": args.verdict, "by": args.by, "date": now()[:10], "note": (args.note or "").strip()}
+    write_jsonl(path, claims)
+    print(f"{args.id}: {gr.VERDICTS[args.verdict]}")
+    if args.verdict == "no":
+        print("Факт не подтверждён источником. Отзовите его (revoke) или замените (claim … --supersedes) — "
+              "и посмотрите, что на нём стоит:")
+        print_impact(pdir, args.id)
 
 
 def cmd_revoke(args):
@@ -522,6 +607,25 @@ def check(pdir, finishing=None):
             errors.append(f"{s.get('id')}: у источника нет ссылки или пути (ref)")
         if s.get("local") and not (pdir / s["local"]).exists():
             warnings.append(f"{s.get('id')}: локальная копия {s['local']} не найдена")
+    strict = finishing in ("options", "strategy")
+    critical = gr.critical_ids(pdir, claims_by_id, decisions)
+    for c in claims:
+        if c.get("status") == "active" and c.get("type") == "fact":
+            errs, warns, _ = gr.ground(pdir, c, sources_by_id)
+            errors += errs
+            warnings += warns
+            verdict = (c.get("vet") or {}).get("verdict")
+            if verdict == "no":
+                errors.append(f"{c['id']}: смысловая сверка — источник не подтверждает факт; отзовите или замените")
+            elif verdict == "partial":
+                warnings.append(f"{c['id']}: источник подтверждает факт частично — "
+                                f"{(c.get('vet') or {}).get('note') or 'проверьте формулировку'}")
+            if c["id"] in critical:
+                bucket = errors if strict else warnings
+                if gr.needs_quote(c, sources_by_id) and not c.get("quote") and not c.get("calc"):
+                    bucket.append(f"{c['id']}: критичный факт без дословной цитаты и расчёта")
+                if not verdict and gr.needs_quote(c, sources_by_id):
+                    bucket.append(f"{c['id']}: критичный факт не прошёл смысловую сверку — vet {pdir.name}")
     for c in claims:
         if c.get("status") == "active":
             errors += validate_claim(c, sources_by_id, claims_by_id)
@@ -743,6 +847,14 @@ def cmd_show(args):
         for ref in c.get("sources") or []:
             s = sources_by_id.get(ref.get("id"), {})
             print(f"Источник {ref.get('id')}: {s.get('title')} — {s.get('ref')} · место: {ref.get('where') or '—'}")
+        if c.get("quote"):
+            mark = {True: "найдена в источнике", False: "НЕ найдена в источнике", None: "не с чем сверить"}[c.get("quote_checked")]
+            print(f"Цитата ({mark}): «{c['quote']}»")
+        if c.get("calc"):
+            print(f"Расчёт: {c['calc']}")
+        if c.get("vet"):
+            v = c["vet"]
+            print(f"Смысловая сверка: {gr.VERDICTS[v['verdict']]} ({v.get('by')}, {v.get('date')}) {v.get('note') or ''}".rstrip())
         for dep in c.get("based_on") or []:
             print(f"Опирается на {dep}: {claims_by_id.get(dep, {}).get('text')}")
         print("Что опирается на него:")
@@ -820,7 +932,17 @@ def build_parser():
     s.add_argument("--based-on", help="E-001,E-002")
     s.add_argument("--confidence", default="medium", choices=["high", "medium", "low"])
     s.add_argument("--supersedes", help="номер утверждения, которое заменяется")
+    s.add_argument("--quote", help="дословный фрагмент источника, на котором стоит факт")
+    s.add_argument("--calc", help="файл с выводом расчёта внутри проекта, если факт посчитан")
     s.set_defaults(fn=cmd_claim)
+
+    s = sub.add_parser("vet", help="смысловая сверка факта с источником")
+    s.add_argument("project")
+    s.add_argument("id", nargs="?", help="без номера — список критичных фактов без сверки")
+    s.add_argument("--verdict", choices=sorted(gr.VERDICTS), help="supports — подтверждает, partial — частично, no — не подтверждает")
+    s.add_argument("--by", default="self", choices=["self", "helper", "human"], help="кто сверял: сам агент, отдельный помощник, человек")
+    s.add_argument("--note", help="что не так (обязательно для partial и no)")
+    s.set_defaults(fn=cmd_vet)
 
     s = sub.add_parser("revoke", help="отозвать утверждение")
     s.add_argument("project")
