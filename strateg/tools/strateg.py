@@ -156,6 +156,13 @@ def clock_minutes(rows):
     return round(total)
 
 
+def usd_line(rows):
+    usd = [r for r in rows if r.get("cost_usd") is not None]
+    if not usd:
+        return ""
+    return f"; по прайс-листу ${sum(float(r['cost_usd']) for r in usd):.2f} (замерено у {len(usd)} записей)"
+
+
 def money_line(rows):
     # Ноль «по оценке» — это не замер: так агент раньше отмечал, что не знает расхода.
     measured = [r for r in rows if r.get("cost_rub") is not None
@@ -744,7 +751,7 @@ def cmd_cost(args):
           f"(от записи до записи, перерывы дольше {PAUSE_MIN} мин не считаются)")
     if minutes:
         print(f"Время по оценке агента: {minutes:g} мин — это оценка труда, а не замер")
-    print(f"Расходы: {money_line(rows)}")
+    print(f"Расходы: {money_line(rows)}{usd_line(rows)}")
     for step in STEPS:
         part = [r for r in rows if r.get("step") == step]
         if part:
@@ -889,6 +896,26 @@ def cmd_show(args):
         for dep in d.get("based_on") or []:
             c = claims_by_id.get(dep, {})
             print(f"Основание {dep} ({c.get('type')}, {c.get('status')}): {c.get('text')}")
+
+
+def cmd_usage(args):
+    import usage as us
+    paths = [Path(p).expanduser() for p in args.files]
+    missing = [str(p) for p in paths if not p.is_file()]
+    if missing:
+        raise Fail("Не найдены журналы: " + ", ".join(missing))
+    s = us.summarize(paths)
+    print(us.report(s))
+    if args.project:
+        pdir = project_dir(args.project)
+        rub = round(s["total_usd"] * s["usd_rub"], 2) if s.get("usd_rub") else None
+        row = journal(pdir, step=load_state(pdir)["step"], action="расход сеанса по журналу Claude Code: "
+                      + ", ".join(f"{m} {r['responses']} ответов" for m, r in sorted(s["by_model"].items())),
+                      tool="claude-code", model=", ".join(sorted(s["by_model"])), minutes=round(s["active_minutes"], 1),
+                      cost_rub=rub, cost_usd=round(s["total_usd"], 4), cost_basis="прайс-лист",
+                      result="ok", human_help=False)
+        print(f"Записано в журнал проекта {args.project}: ${row['cost_usd']}"
+              + (f" ≈ {rub} ₽" if rub is not None else ""))
 
 
 def cmd_hook_edit(args):
@@ -1037,6 +1064,11 @@ def build_parser():
     s.add_argument("project")
     s.add_argument("id")
     s.set_defaults(fn=cmd_show)
+
+    s = sub.add_parser("usage", help="расход по журналу сеанса Claude Code: токены и цена по прайс-листу")
+    s.add_argument("files", nargs="+", help="файлы журнала сеанса (.jsonl), например из ~/.claude/projects/…")
+    s.add_argument("--project", help="записать итог в журнал этого проекта")
+    s.set_defaults(fn=cmd_usage)
 
     s = sub.add_parser("hook-edit", help="для хуков среды: проверка после правки файла")
     s.set_defaults(fn=cmd_hook_edit)

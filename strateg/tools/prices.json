@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-03",
+  "source": "Публичные цены Claude API за миллион токенов (справочник Claude API, данные на 3 ноября 2026); чтение кэша — цена из того же справочника; запись в кэш — 1,25 цены ввода для 5-минутного кэша и 2 цены ввода для часового; веб-поиск — $10 за 1000 запросов. Перед отчётом сверить с https://platform.claude.com/docs/en/about-claude/pricing",
+  "usd_rub": null,
+  "usd_rub_note": "Курс для перевода в рубли не задан: укажите его вручную вместе с датой и источником; без него итог только в долларах",
+  "cache_write_5m": 1.25,
+  "cache_write_1h": 2.0,
+  "web_search_per_1000": 10.0,
+  "models": {
+    "claude-fable-5-2": {
+      "input": 8.0,
+      "output": 40.0,
+      "cache_read": 0.2
+    },
+    "claude-opus-5-5": {
+      "input": 4.0,
+      "output": 20.0,
+      "cache_read": 0.2
+    },
+    "claude-sonnet-5-5": {
+      "input": 2.0,
+      "output": 10.0,
+      "cache_read": 0.1
+    },
+    "claude-haiku-5-5": {
+      "input": 0.1,
+      "output": 0.5,
+      "cache_read": 0.01,
+      "long": {
+        "above": 100000,
+        "input": 0.5,
+        "output": 2.5
+      }
+    }
+  }
+}

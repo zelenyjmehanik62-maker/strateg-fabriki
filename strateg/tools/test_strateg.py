@@ -583,6 +583,52 @@ class GroundingTests(Base):
         self.assertIn("цитата не найдена", out)
 
 
+class UsageTests(Base):
+    """T27: расход по журналу Claude Code считается по прайс-листу и не путается с нулём."""
+
+    def transcript(self, rows):
+        path = self.p / "session.jsonl"
+        lines = []
+        for i, (model, usage, ts) in enumerate(rows):
+            lines.append(json.dumps({"type": "assistant", "timestamp": ts,
+                                     "message": {"id": f"m{i // 2 if model == 'dup' else i}", "model": model, "usage": usage}}))
+        path.write_text("\n".join(lines) + "\nне json\n", encoding="utf-8")
+        return path
+
+    def test_usage_prices_cache_search_and_dedup(self):
+        u = {"input_tokens": 1000, "cache_creation_input_tokens": 10000,
+             "cache_creation": {"ephemeral_5m_input_tokens": 10000, "ephemeral_1h_input_tokens": 0},
+             "cache_read_input_tokens": 100000, "output_tokens": 2000, "server_tool_use": {"web_search_requests": 3}}
+        path = self.transcript([("claude-opus-5-5", u, "2026-11-16T10:00:00Z"),
+                                ("claude-opus-5-5", u, "2026-11-16T10:05:00Z")])
+        import usage as us
+        s = us.summarize([path])
+        # (1000*4 + 10000*4*1.25 + 100000*0.2 + 2000*20)/1e6 + 3*10/1000 = 0.004+0.05+0.02+0.04+0.03 = 0.144 за ответ
+        self.assertAlmostEqual(s["total_usd"], 0.288, places=6)
+        self.assertEqual(s["responses"], 2)
+        self.assertAlmostEqual(s["active_minutes"], 5.0)
+
+    def test_usage_same_response_counted_once_and_haiku_long_prompt(self):
+        small = {"input_tokens": 50000, "cache_read_input_tokens": 0, "output_tokens": 1000}
+        big = {"input_tokens": 150000, "cache_read_input_tokens": 0, "output_tokens": 1000}
+        path = self.transcript([("claude-haiku-5-5", small, "2026-11-16T10:00:00Z"),
+                                ("claude-haiku-5-5", big, "2026-11-16T10:01:00Z")])
+        import usage as us
+        s = us.summarize([path])
+        # 50000*0.10 + 1000*0.50 = 0.0055; длинный: 150000*0.50 + 1000*2.50 = 0.0775
+        self.assertAlmostEqual(s["total_usd"], 0.083, places=6)
+
+    def test_usage_unknown_model_and_project_log(self):
+        u = {"input_tokens": 1000, "output_tokens": 1000}
+        path = self.transcript([("claude-unknown-9", u, "2026-11-16T10:00:00Z"),
+                                ("claude-sonnet-5-5", u, "2026-11-16T10:02:00Z")])
+        out = self.run_ok("usage", str(path), "--project", "demo")
+        self.assertIn("Нет цены для моделей: claude-unknown-9", out)
+        self.assertIn("$0.01", out)
+        self.assertIn("по прайс-листу $0.01", self.run_ok("cost", "demo"))
+        self.assertEqual(self.run_cmd("usage", str(self.p / "нет.jsonl"))[0], 1)
+
+
 class HookTests(Base):
     def payload(self, name):
         return json.dumps({"tool_input": {"file_path": str(self.p / name)}})

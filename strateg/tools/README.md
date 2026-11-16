@@ -48,6 +48,7 @@ python3 tools/strateg.py step podpiska --waiting "нужна выгрузка о
 python3 tools/strateg.py step podpiska --mode fast       # режим работы: fast — быстрый, full — полный
 
 # Проверка и расходы
+python3 tools/strateg.py usage ~/.claude/projects/<папка>/<сеанс>.jsonl --project podpiska   # токены по моделям и цена по прайс-листу из журнала Claude Code
 python3 tools/strateg.py check podpiska
 python3 tools/strateg.py cost podpiska
 ```
