@@ -131,9 +131,10 @@ def report(s):
     lines = [f"Ответов модели: {s['responses']}; время по журналу среды: {s['active_minutes']:.1f} мин активной работы "
              f"(всего {s['wall_minutes']:.1f} мин, паузы дольше {PAUSE_MIN} мин не считаются)"]
     for model, r in sorted(s["by_model"].items()):
-        lines.append(f"- {model}: ответов {r['responses']}; ввод {r['input']:,}, запись в кэш {r['cache_write_5m'] + r['cache_write_1h']:,}, "
-                     f"чтение из кэша {r['cache_read']:,}, вывод {r['output']:,} токенов; поисков {r['web_search']}; "
-                     f"≈ ${r['cost']:.2f}".replace(",", " "))
+        searches = f"поисков через API {r['web_search']}; " if r["web_search"] else ""
+        lines.append((f"- {model}: ответов {r['responses']}; ввод {r['input']:,}, запись в кэш {r['cache_write_5m'] + r['cache_write_1h']:,}, "
+                      f"чтение из кэша {r['cache_read']:,}, вывод {r['output']:,} токенов; {searches}"
+                      f"≈ ${r['cost']:.2f}").replace(",", " "))
     t = s.get("tools") or {}
     if t.get("search_calls") or t.get("fetches"):
         lines.append(f"- поиск и страницы инструментами среды: поисков {t['searches']} (≈ ${s['tool_search_usd']:.2f} по цене поиска), "
