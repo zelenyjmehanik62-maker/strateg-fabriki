@@ -51,6 +51,7 @@ python3 tools/strateg.py step podpiska --reopen options --reason "бюджет �
 # Проверка и расходы
 python3 tools/strateg.py usage ~/.claude/projects/<папка>/<сеанс>.jsonl --project podpiska   # токены по моделям и цена по прайс-листу из журнала Claude Code
 python3 tools/strateg.py check podpiska
+python3 tools/strateg.py pii podpiska        # телефоны, почты, номера карт, паспортов, СНИЛС в файлах проекта (кроме materials/private/)
 python3 tools/strateg.py cost podpiska
 ```
 

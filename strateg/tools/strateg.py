@@ -733,6 +733,11 @@ def check(pdir, finishing=None):
     if finishing == "collect" and not sources:
         errors.append("sources.jsonl: ни одного источника, а шаг «Материалы» закрывается")
 
+    import pii
+    for rel, n, kind, masked in pii.scan(pdir):
+        errors.append(f"{rel}:{n}: похоже на персональные данные ({kind}: {masked}) — обезличьте или перенесите "
+                      "в materials/private/; публичное значение — в pii-allow.txt")
+
     for d in decisions:
         if d.get("status") != "active":
             continue
@@ -940,6 +945,19 @@ def cmd_usage(args):
               + (f" ≈ {rub} ₽" if rub is not None else ""))
 
 
+def cmd_pii(args):
+    import pii
+    hits = pii.scan(project_dir(args.project))
+    if not hits:
+        print("Похожих на персональные данные значений не найдено. Имена и узнаваемые подробности скрипт "
+              "надёжно не ищет — их проверьте сами.")
+        return 0
+    for rel, n, kind, masked in hits:
+        print(f"{rel}:{n}: {kind}: {masked}")
+    print(f"Найдено: {len(hits)}. Обезличьте или перенесите исходник в materials/private/ (не попадает в git).")
+    return 1
+
+
 def cmd_hook_edit(args):
     """Хук после правки файла: если это результат проекта, проверяет его сразу."""
     try:
@@ -948,10 +966,21 @@ def cmd_hook_edit(args):
     except (ValueError, OSError):
         return 0
     root = projects_root().resolve()
-    if root not in path.parents or path.name not in RESULT_FILES:
+    if root not in path.parents:
         return 0
     pdir = root / path.relative_to(root).parts[0]
     if not (pdir / "state.json").exists():
+        return 0
+    import pii
+    rel = str(path.relative_to(pdir))
+    leaks = [h for h in pii.scan(pdir) if h[0] == rel]
+    if leaks:
+        print(f"В {rel} похоже на персональные данные:", file=sys.stderr)
+        for _, n, kind, masked in leaks:
+            print(f"- строка {n}: {kind} {masked}", file=sys.stderr)
+        print("Обезличьте или перенесите исходник в materials/private/.", file=sys.stderr)
+        return 2
+    if path.name not in RESULT_FILES:
         return 0
     report = check(pdir)
     mine = [e for e in report["errors"] if e.startswith(path.name)]
@@ -1093,6 +1122,10 @@ def build_parser():
     s.add_argument("files", nargs="+", help="файлы журнала сеанса (.jsonl), например из ~/.claude/projects/…")
     s.add_argument("--project", help="записать итог в журнал этого проекта")
     s.set_defaults(fn=cmd_usage)
+
+    s = sub.add_parser("pii", help="поиск персональных данных в файлах проекта")
+    s.add_argument("project")
+    s.set_defaults(fn=cmd_pii)
 
     s = sub.add_parser("hook-edit", help="для хуков среды: проверка после правки файла")
     s.set_defaults(fn=cmd_hook_edit)

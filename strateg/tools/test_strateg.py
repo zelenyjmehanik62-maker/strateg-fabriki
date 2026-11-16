@@ -714,6 +714,40 @@ class UsageTests(Base):
         self.assertEqual(self.run_cmd("usage", str(self.p / "нет.jsonl"))[0], 1)
 
 
+class PiiTests(Base):
+    """T28: персональные данные не должны попасть в файлы проекта, кроме materials/private/."""
+
+    def test_pii_found_masked_and_blocks_check(self):
+        (self.p / "materials" / "interviews").mkdir()
+        (self.p / "materials" / "interviews" / "р1.md").write_text(
+            "Респондент: звоните +7 (912) 345-67-89, пишите ivan.petrov@mail.ru\nКарта 4111 1111 1111 1111\n"
+            "СНИЛС 112-233-445 95\nОтток 4,5% в месяц, 7300 пробных, 2026-09-16\n", encoding="utf-8")
+        code, out, _ = self.run_cmd("pii", "demo")
+        self.assertEqual(code, 1)
+        for kind in ("телефон", "электронная почта", "номер карты", "СНИЛС"):
+            self.assertIn(kind, out)
+        self.assertNotIn("ivan.petrov@mail.ru", out)
+        self.assertEqual(out.count("р1.md"), 4)  # строка с цифрами бизнеса не срабатывает
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertEqual(code, 1)
+        self.assertIn("персональные данные", out)
+
+    def test_private_folder_and_allowlist(self):
+        (self.p / "materials" / "private").mkdir()
+        (self.p / "materials" / "private" / "запись.txt").write_text("Иван, +7 912 345 67 89", encoding="utf-8")
+        (self.p / "materials" / "компания.md").write_text("Горячая линия: 8 800 555-35-35", encoding="utf-8")
+        self.assertEqual(self.run_cmd("pii", "demo")[0], 1)
+        (self.p / "pii-allow.txt").write_text("8 800 555-35-35\n", encoding="utf-8")
+        self.assertEqual(self.run_cmd("pii", "demo")[0], 0)
+
+    def test_hook_blocks_pii_in_any_project_file(self):
+        (self.p / "materials" / "р2.md").write_text("почта: a.b@example.org", encoding="utf-8")
+        payload = json.dumps({"tool_input": {"file_path": str(self.p / "materials" / "р2.md")}})
+        code, _, err = self.run_cmd("hook-edit", stdin=payload)
+        self.assertEqual(code, 2)
+        self.assertIn("электронная почта", err)
+
+
 class HookTests(Base):
     def payload(self, name):
         return json.dumps({"tool_input": {"file_path": str(self.p / name)}})

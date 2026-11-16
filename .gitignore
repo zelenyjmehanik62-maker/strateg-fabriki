@@ -12,3 +12,5 @@ node_modules/
 # тяжёлые файлы сдачи храним на диске, в репозитории — ссылки
 submission/*.mp4
 submission/*.mov
+# исходные записи интервью и всё с личными данными — только локально
+strateg/projects/*/materials/private/
