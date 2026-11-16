@@ -46,6 +46,7 @@ python3 tools/strateg.py step podpiska --next "сопоставить цены �
 python3 tools/strateg.py step podpiska --done collect --next "составить план исследования"
 python3 tools/strateg.py step podpiska --waiting "нужна выгрузка оттока по месяцам"
 python3 tools/strateg.py step podpiska --mode fast       # режим работы: fast — быстрый, full — полный
+python3 tools/strateg.py step podpiska --reopen options --reason "бюджет уменьшен до 1 млн"   # вернуться к шагу: он и следующие снова открыты, решения не трогаются
 
 # Проверка и расходы
 python3 tools/strateg.py usage ~/.claude/projects/<папка>/<сеанс>.jsonl --project podpiska   # токены по моделям и цена по прайс-листу из журнала Claude Code

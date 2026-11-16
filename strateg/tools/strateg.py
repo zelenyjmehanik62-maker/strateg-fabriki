@@ -208,6 +208,8 @@ def cmd_status(args):
     by_type = {t: sum(1 for c in active if c.get("type") == t) for t in CLAIM_TYPES}
     print(f"Проект: {st['project']}")
     print(f"Шаг: {STEP_NAMES.get(st['step'], st['step'])} ({st['step']})")
+    for h in st.get("history", [])[-3:]:
+        print(f"Возврат {h['date'][:16]}: к шагу «{STEP_NAMES.get(h['reopened'], h['reopened'])}» — {h['reason']}")
     print(f"Режим: {MODES.get(st.get('mode'), 'не выбран')}")
     print("Завершено: " + (", ".join(STEP_NAMES.get(s, s) for s in st.get("done", [])) or "—"))
     print(f"Следующее действие: {st.get('next_action') or '—'}")
@@ -584,6 +586,26 @@ def cmd_step(args):
             st["step"] = STEPS[idx + 1]
             if args.next is None:
                 st["next_action"] = f"начать шаг «{STEP_NAMES[st['step']]}» по навыку skills/{st['step']}"
+    if args.reopen:
+        if not (args.reason or "").strip():
+            raise Fail("Укажите в --reason, что изменилось и почему возвращаемся к шагу.")
+        idx = STEPS.index(args.reopen)
+        dropped = [s for s in st["done"] if STEPS.index(s) >= idx]
+        st.setdefault("history", []).append({"date": now(), "reopened": args.reopen, "reason": args.reason.strip(),
+                                             "done_before": list(st["done"]), "step_before": st["step"]})
+        st["done"] = [s for s in st["done"] if STEPS.index(s) < idx]
+        st["step"] = args.reopen
+        if args.next is None:
+            st["next_action"] = f"перепроверить шаг «{STEP_NAMES[args.reopen]}»: {args.reason.strip()}"
+        journal(pdir, step=args.reopen, action=f"возврат к шагу «{STEP_NAMES[args.reopen]}»: {args.reason.strip()}",
+                tool="strateg.py", minutes=0, cost_rub=None, cost_basis="оценка", result="ok", human_help=True)
+        decisions, _ = read_jsonl(pdir / "decisions.jsonl")
+        active = [d for d in decisions if d.get("status") == "active"]
+        if dropped:
+            print("Снова открыты шаги: " + ", ".join(STEP_NAMES[s] for s in dropped) + ". Их файлы не удалены — перепроверьте и закройте заново.")
+        if active:
+            print("Принятые решения остаются в силе, пока человек их не пересмотрит: "
+                  + "; ".join(f"{d['id']} «{d.get('text', '')[:60]}»" for d in active))
     if args.mode:
         st["mode"] = args.mode
     if args.set:
@@ -1033,6 +1055,8 @@ def build_parser():
     s.add_argument("--done", action="append", choices=STEPS, help="закрыть шаг (с проверкой)")
     s.add_argument("--set", choices=STEPS, help="перейти на шаг без закрытия")
     s.add_argument("--mode", choices=sorted(MODES), help="режим работы: fast — быстрый, full — полный")
+    s.add_argument("--reopen", choices=STEPS, help="вернуться к шагу: он и следующие снова открыты, история сохраняется")
+    s.add_argument("--reason", help="что изменилось — обязательно для --reopen")
     s.add_argument("--next", help="следующее действие")
     s.add_argument("--waiting", help="чего ждём от пользователя; пустая строка — сбросить")
     s.add_argument("--question", action="append", help="добавить открытый вопрос")

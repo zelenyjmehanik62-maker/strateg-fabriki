@@ -264,6 +264,28 @@ class StateTests(Base):
         st = json.loads((self.p / "state.json").read_text(encoding="utf-8"))
         self.assertIsNone(st["waiting_for_user"])
 
+    def test_reopen_keeps_history_and_decisions(self):
+        self.write("brief.md", "# Постановка\n\nПочему падает удержание?\n")
+        self.run_ok("step", "demo", "--done", "frame")
+        self.run_ok("step", "demo", "--set", "options")
+        st = json.loads((self.p / "state.json").read_text(encoding="utf-8"))
+        st["done"] = ["frame", "collect", "research", "options"]
+        (self.p / "state.json").write_text(json.dumps(st, ensure_ascii=False), encoding="utf-8")
+        e = self.fact()
+        self.run_ok("decide", "demo", "--text", "Вариант B", "--based-on", e)
+        code, _, err = self.run_cmd("step", "demo", "--reopen", "research")
+        self.assertEqual(code, 1)
+        self.assertIn("--reason", err)
+        out = self.run_ok("step", "demo", "--reopen", "research", "--reason", "бюджет уменьшен до 1 млн")
+        self.assertIn("Исследование, Варианты", out)
+        self.assertIn("остаются в силе", out)
+        st = json.loads((self.p / "state.json").read_text(encoding="utf-8"))
+        self.assertEqual((st["step"], st["done"]), ("research", ["frame", "collect"]))
+        self.assertEqual(st["history"][-1]["done_before"], ["frame", "collect", "research", "options"])
+        self.assertIn("бюджет уменьшен", self.run_ok("status", "demo"))
+        decisions = (self.p / "decisions.jsonl").read_text(encoding="utf-8")
+        self.assertIn('"status": "active"', decisions)
+
     def test_resume_shows_next_action(self):
         self.run_ok("step", "demo", "--next", "сопоставить S-001 и S-002 по ценам", "--waiting", "доступ к таблице")
         out = self.run_ok("status", "demo")
