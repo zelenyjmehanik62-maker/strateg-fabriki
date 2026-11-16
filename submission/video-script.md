@@ -28,13 +28,13 @@
 
 ## Команды для подтверждающих кадров
 
-Выполнять из `strateg/`. Значение `demo-megafon` применять только после T8; до этого для репетиции использовать существующий проект `polka`. `-X utf8` нужен для надёжного вывода кириллицы и ₽ на проверенной Windows.
+Выполнять из `strateg/`. Значение `demo-megafon` применять только после T8; до этого для репетиции использовать существующий проект `polka`. Вывод кириллицы и ₽ на Windows работает без дополнительных флагов (исправлено в T21); на macOS и Linux вместо `python` пишут `python3`.
 
 ```powershell
-python -X utf8 tools/strateg.py status demo-megafon
-python -X utf8 tools/strateg.py check demo-megafon
-python -X utf8 tools/strateg.py review demo-megafon
-python -X utf8 tools/strateg.py cost demo-megafon
+python tools/strateg.py status demo-megafon
+python tools/strateg.py check demo-megafon
+python tools/strateg.py review demo-megafon
+python tools/strateg.py cost demo-megafon
 ```
 
 После T8 выбрать настоящие идентификаторы и вписать их в [план кадров](recording-plan.md). Для них выполнить `show demo-megafon E-<номер>` и `impact demo-megafon E-<номер>`; угловые скобки не копировать в терминал. Перед записью проверить, что команды поддерживаются текущей версией и данные относятся к той же сессии.
