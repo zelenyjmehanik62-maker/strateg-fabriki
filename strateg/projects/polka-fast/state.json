@@ -1,0 +1,16 @@
+{
+  "project": "polka-fast",
+  "step": "follow",
+  "done": [
+    "frame",
+    "collect",
+    "research",
+    "options",
+    "strategy"
+  ],
+  "waiting_for_user": "правки к summary.md (по желанию); через 6 недель после запуска — значения доли оплативших, доли «не открыл», числа оплативших в месяц и обращений о списании",
+  "next_action": "сопровождение: сверка показателей по плану проверки",
+  "open_questions": [],
+  "updated": "2026-11-16T11:10:15+03:00",
+  "mode": "fast"
+}

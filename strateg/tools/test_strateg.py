@@ -232,6 +232,19 @@ class StateTests(Base):
         st = json.loads((self.p / "state.json").read_text(encoding="utf-8"))
         self.assertEqual((st["step"], st["done"], st["next_action"]), ("collect", ["frame"], "собрать материалы"))
 
+    def test_mode_is_saved_and_shown(self):
+        self.assertIn("Режим: не выбран", self.run_ok("status", "demo"))
+        self.run_ok("step", "demo", "--mode", "fast")
+        self.assertIn("Режим: быстрый", self.run_ok("status", "demo"))
+
+    def test_strategy_step_needs_summary(self):
+        for name in ("strategy-product.md", "strategy-comms.md", "verification.md"):
+            self.write(name, "# Документ\n\nТекст без цифр (вывод).\n")
+        code, _, err = self.run_cmd("step", "demo", "--done", "strategy")
+        self.assertEqual(code, 1)
+        self.write("summary.md", "# Сводка\n\nКороткий итог (вывод).\n")
+        self.run_ok("step", "demo", "--done", "strategy")
+
     def test_resume_shows_next_action(self):
         self.run_ok("step", "demo", "--next", "сопоставить S-001 и S-002 по ценам", "--waiting", "доступ к таблице")
         out = self.run_ok("status", "demo")

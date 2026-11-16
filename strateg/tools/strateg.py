@@ -21,7 +21,9 @@ STEP_NAMES = {
 }
 SOURCE_KINDS = ["doc", "table", "site", "image", "audio", "video", "interview", "synthetic", "user"]
 CLAIM_TYPES = ["fact", "hypothesis", "forecast", "synthetic"]
-RESULT_FILES = ["findings.md", "options.md", "strategy-product.md", "strategy-comms.md", "verification.md"]
+RESULT_FILES = ["findings.md", "options.md", "strategy-product.md", "strategy-comms.md", "verification.md",
+                "summary.md"]
+MODES = {"fast": "быстрый", "full": "полный"}
 REF_RE = re.compile(r"\[(E-\d+(?:\s*,\s*E-\d+)*)\]")
 # Слова, которые показывают читателю, что перед ним не факт.
 HEDGES = ("гипотез", "предполож", "прогноз", "оценк", "вероятн", "возможно", "ожида", "может быть", "допущен")
@@ -189,6 +191,7 @@ def cmd_status(args):
     by_type = {t: sum(1 for c in active if c.get("type") == t) for t in CLAIM_TYPES}
     print(f"Проект: {st['project']}")
     print(f"Шаг: {STEP_NAMES.get(st['step'], st['step'])} ({st['step']})")
+    print(f"Режим: {MODES.get(st.get('mode'), 'не выбран')}")
     print("Завершено: " + (", ".join(STEP_NAMES.get(s, s) for s in st.get("done", [])) or "—"))
     print(f"Следующее действие: {st.get('next_action') or '—'}")
     if st.get("waiting_for_user"):
@@ -478,6 +481,8 @@ def cmd_step(args):
             st["step"] = STEPS[idx + 1]
             if args.next is None:
                 st["next_action"] = f"начать шаг «{STEP_NAMES[st['step']]}» по навыку skills/{st['step']}"
+    if args.mode:
+        st["mode"] = args.mode
     if args.set:
         st["step"] = args.set
     if args.next is not None:
@@ -577,7 +582,7 @@ def check(pdir, finishing=None):
             errors.append("options.md: у вариантов нет возражений")
 
     required = {"frame": ["brief.md"], "research": ["plan.md", "findings.md"], "options": ["options.md"],
-                "strategy": ["strategy-product.md", "strategy-comms.md", "verification.md"]}
+                "strategy": ["strategy-product.md", "strategy-comms.md", "verification.md", "summary.md"]}
     for name in required.get(finishing, []):
         if not meaningful(pdir / name):
             errors.append(f"{name}: не заполнен, а шаг «{STEP_NAMES[finishing]}» закрывается")
@@ -867,6 +872,7 @@ def build_parser():
     s.add_argument("project")
     s.add_argument("--done", action="append", choices=STEPS, help="закрыть шаг (с проверкой)")
     s.add_argument("--set", choices=STEPS, help="перейти на шаг без закрытия")
+    s.add_argument("--mode", choices=sorted(MODES), help="режим работы: fast — быстрый, full — полный")
     s.add_argument("--next", help="следующее действие")
     s.add_argument("--waiting", help="чего ждём от пользователя; пустая строка — сбросить")
     s.add_argument("--question", action="append", help="добавить открытый вопрос")

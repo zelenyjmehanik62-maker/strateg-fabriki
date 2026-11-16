@@ -42,6 +42,7 @@ python3 tools/strateg.py log podpiska --action "разобран сайт тар
 python3 tools/strateg.py step podpiska --next "сопоставить цены с оттоком"
 python3 tools/strateg.py step podpiska --done collect --next "составить план исследования"
 python3 tools/strateg.py step podpiska --waiting "нужна выгрузка оттока по месяцам"
+python3 tools/strateg.py step podpiska --mode fast       # режим работы: fast — быстрый, full — полный
 
 # Проверка и расходы
 python3 tools/strateg.py check podpiska
