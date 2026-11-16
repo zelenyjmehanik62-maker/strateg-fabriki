@@ -630,6 +630,14 @@ def meaningful(path):
     return any(l.strip() and not l.lstrip().startswith("#") for l in path.read_text(encoding="utf-8").splitlines())
 
 
+SUMMARY_LIMIT = 500
+
+
+def summary_words(text):
+    """Слова сводки без ссылок на реестр: «[E-012]» словом не считается, число — считается."""
+    return len(re.findall(r"[^\W_]+(?:[-–.,][^\W_]+)*", REF_RE.sub("", text)))
+
+
 def check(pdir, finishing=None):
     errors, warnings = [], []
     sources, e1 = read_jsonl(pdir / "sources.jsonl")
@@ -675,6 +683,12 @@ def check(pdir, finishing=None):
                 elif claims_by_id.get(dep, {}).get("status") == "superseded":
                     warnings.append(f"{c['id']}: опирается на {dep}, которое заменено на "
                                     f"{claims_by_id[dep].get('superseded_by', '?')} — проверьте, остаётся ли в силе")
+
+    summary = pdir / "summary.md"
+    if summary.exists():
+        words = summary_words(summary.read_text(encoding="utf-8"))
+        if words > SUMMARY_LIMIT:
+            warnings.append(f"summary.md: {words} слов при лимите {SUMMARY_LIMIT} — подробности перенесите в файлы проекта")
 
     for name in RESULT_FILES:
         path = pdir / name

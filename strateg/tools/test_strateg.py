@@ -153,6 +153,14 @@ class CheckTests(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("Проверка пройдена", out)
 
+    def test_long_summary_warns_but_passes(self):
+        e = self.fact()
+        self.write("summary.md", f"Тариф конкурента 299 ₽ [{e}]. " + "слово " * 510 + "\n")
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertEqual(code, 0, out)
+        self.assertIn("при лимите 500", out)
+        self.assertEqual(strateg.summary_words(f"Тариф 299 ₽ [{e}], а не 1 540"), 6)
+
     def test_reference_to_missing_and_revoked(self):
         e = self.fact()
         self.write("findings.md", f"Тариф 299 ₽ [{e}]. Доля 40% [E-777].\n\n## Чего мы не знаем\n\n—\n")
