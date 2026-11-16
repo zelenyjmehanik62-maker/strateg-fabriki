@@ -246,6 +246,17 @@ class StateTests(Base):
         self.write("summary.md", "# Сводка\n\nКороткий итог (вывод).\n")
         self.run_ok("step", "demo", "--done", "strategy")
 
+    def test_examples_listed_apart(self):
+        import json as _j
+        self.run_ok("new", "own")
+        st = _j.loads((self.p / "state.json").read_text(encoding="utf-8"))
+        st["example"] = "учебный пример"
+        (self.p / "state.json").write_text(_j.dumps(st, ensure_ascii=False), encoding="utf-8")
+        out = self.run_ok("status")
+        self.assertIn("Готовые примеры", out)
+        self.assertIn("- demo: учебный пример", out)
+        self.assertLess(out.index("- own:"), out.index("Готовые примеры"))
+
     def test_resume_shows_next_action(self):
         self.run_ok("step", "demo", "--next", "сопоставить S-001 и S-002 по ценам", "--waiting", "доступ к таблице")
         out = self.run_ok("status", "demo")

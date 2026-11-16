@@ -12,5 +12,6 @@
   "next_action": "сопровождение: сверка показателей по плану проверки",
   "open_questions": [],
   "updated": "2026-11-16T11:10:15+03:00",
-  "mode": "fast"
+  "mode": "fast",
+  "example": "та же задача в быстром режиме; начинать чтение с projects/polka-fast/summary.md"
 }

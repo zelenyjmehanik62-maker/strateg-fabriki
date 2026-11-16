@@ -175,12 +175,21 @@ def cmd_status(args):
         if not found:
             print("Проектов пока нет. Создать: python3 tools/strateg.py new <имя>")
             return
-        print("Проекты:")
-        for pdir in found:
-            st = load_state(pdir)
-            wait = f" · ждёт пользователя: {st['waiting_for_user']}" if st.get("waiting_for_user") else ""
-            print(f"- {st['project']}: шаг «{STEP_NAMES.get(st['step'], st['step'])}»{wait}")
-            print(f"  дальше: {st.get('next_action') or '—'} (обновлено {st.get('updated', '—')})")
+        states = [load_state(p) for p in found]
+        own = [st for st in states if not st.get("example")]
+        examples = [st for st in states if st.get("example")]
+        if own:
+            print("Проекты:")
+            for st in own:
+                wait = f" · ждёт пользователя: {st['waiting_for_user']}" if st.get("waiting_for_user") else ""
+                print(f"- {st['project']}: шаг «{STEP_NAMES.get(st['step'], st['step'])}»{wait}")
+                print(f"  дальше: {st.get('next_action') or '—'} (обновлено {st.get('updated', '—')})")
+        else:
+            print("Своих проектов пока нет. На вопрос пользователя создайте новый: python3 tools/strateg.py new <имя>")
+        if examples:
+            print("Готовые примеры (учебные результаты; не продолжать без прямой просьбы пользователя):")
+            for st in examples:
+                print(f"- {st['project']}: {st['example']}")
         return
     pdir = project_dir(args.project)
     st = load_state(pdir)
