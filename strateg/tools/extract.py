@@ -174,16 +174,21 @@ def read_text(path):
 
 
 def pdf_to_text(path):
+    """Сначала собственное чтение PDF (стандартная библиотека); если текста почти нет и на
+    компьютере есть pdftotext — пробуем им. Номера страниц — метки места: [стр. N]."""
+    import pdftext
+    try:
+        pages = pdftext.pdf_text(path)
+    except pdftext.PdfError as exc:
+        raise ExtractError(f"PDF не прочитан: {exc}")
+    letters = sum(len(p.strip()) for p in pages)
     tool = shutil.which("pdftotext")
-    if not tool:
-        raise ExtractError(
-            "PDF: на компьютере нет программы pdftotext. Либо откройте PDF средствами вашей среды "
-            "(Claude Code и Cursor читают PDF сами), либо установите poppler и повторите.")
-    result = subprocess.run([tool, "-layout", str(path), "-"], capture_output=True, timeout=120)
-    if result.returncode != 0:
-        raise ExtractError("PDF не прочитан: " + result.stderr.decode("utf-8", "replace").strip())
-    pages = result.stdout.decode("utf-8", "replace").split("\f")
-    return "".join(f"[стр. {i}]\n{page.strip()}\n" for i, page in enumerate(pages, 1) if page.strip())
+    if letters < 20 * max(1, len(pages)) and tool:
+        result = subprocess.run([tool, "-layout", str(path), "-"], capture_output=True, timeout=120)
+        if result.returncode == 0:
+            pages = result.stdout.decode("utf-8", "replace").split("\f")
+    text = "".join(f"[стр. {i}]\n{page.strip()}\n" for i, page in enumerate(pages, 1) if page.strip())
+    return text, len(pages)
 
 
 def extract(path):
@@ -214,7 +219,12 @@ def extract(path):
             rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
             return [(".csv", rows_to_csv(rows), f"строк {len(rows)}, разделитель приведён к запятой, кодировка — к UTF-8")]
         if suffix == ".pdf":
-            return [(".txt", pdf_to_text(path), "метки места: [стр. N]")]
+            text, n = pdf_to_text(path)
+            note = f"страниц {n}; метки места: [стр. N]"
+            if len(text.strip()) < 20 * max(1, n):
+                note += (". Текста почти нет: похоже на скан или картинки. Откройте файл средствами среды "
+                         "(Claude Code и Cursor читают изображения) и записывайте только то, что видно")
+            return [(".txt", text, note)]
         if suffix in TEXT_SUFFIXES:
             return [(".txt", read_text(path), "текстовый файл, кодировка приведена к UTF-8")]
     except (zipfile.BadZipFile, KeyError, ET.ParseError) as exc:

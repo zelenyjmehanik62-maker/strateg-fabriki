@@ -468,6 +468,69 @@ class ExtractTests(Base):
         self.assertIn("не поддерживается", err)
 
 
+def make_pdf(pages, encrypt=False):
+    """Минимальный PDF: страница 1 — латиница простым шрифтом без сжатия,
+    остальные — кириллица двухбайтовым шрифтом с ToUnicode, сжатие Flate."""
+    import zlib
+    objs = {}
+    cyr = sorted({ch for t in pages[1:] for ch in t})
+    code = {ch: i + 1 for i, ch in enumerate(cyr)}
+    cmap = ("/CIDInit /ProcSet findresource begin 12 dict begin begincmap\n1 begincodespacerange <0000> <FFFF> endcodespacerange\n"
+            f"{len(cyr)} beginbfchar\n" + "".join(f"<{code[c]:04X}> <{ord(c):04X}>\n" for c in cyr)
+            + "endbfchar\nendcmap end end").encode()
+    objs[5] = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+    objs[6] = b"<< /Type /Font /Subtype /Type0 /BaseFont /X /Encoding /Identity-H /ToUnicode 7 0 R >>"
+    objs[7] = b"<< /Length %d >>\nstream\n" % len(cmap) + cmap + b"\nendstream"
+    kids = []
+    for i, text in enumerate(pages):
+        if i == 0:
+            body = b"BT /F1 12 Tf 72 700 Td (" + text.encode("latin-1") + b") Tj ET"
+            stream = b"<< /Length %d >>\nstream\n" % len(body) + body + b"\nendstream"
+        else:
+            lines = text.split("\n")
+            parts = [b"BT /F2 12 Tf 1 0 0 1 72 700 Tm"]
+            for j, line in enumerate(lines):
+                if j:
+                    parts.append(b"0 -14 Td")
+                parts.append(b"<" + "".join(f"{code[c]:04X}" for c in line).encode() + b"> Tj")
+            parts.append(b"ET")
+            comp = zlib.compress(b"\n".join(parts))
+            stream = b"<< /Length %d /Filter /FlateDecode >>\nstream\n" % len(comp) + comp + b"\nendstream"
+        cn, pn = 10 + 2 * i, 11 + 2 * i
+        objs[cn] = stream
+        objs[pn] = b"<< /Type /Page /Parent 2 0 R /Contents %d 0 R >>" % cn
+        kids.append(b"%d 0 R" % pn)
+    objs[1] = b"<< /Type /Catalog /Pages 2 0 R >>"
+    objs[2] = (b"<< /Type /Pages /Kids [" + b" ".join(kids) + b"] /Count %d /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>"
+               % len(kids))
+    out = b"%PDF-1.4\n" + b"".join(b"%d 0 obj\n" % n + body + b"\nendobj\n" for n, body in sorted(objs.items()))
+    out += b"trailer\n<< /Root 1 0 R" + (b" /Encrypt 99 0 R" if encrypt else b"") + b" >>\n%%EOF\n"
+    return out
+
+
+class PdfTests(Base):
+    def test_pdf_pages_cyrillic_and_quote(self):
+        (self.p / "materials" / "отчёт.pdf").write_bytes(make_pdf(["Market report 2026", "Отток 4,5% в марте\nДоля оплативших 22%"]))
+        out = self.run_ok("extract", "demo", "materials/отчёт.pdf")
+        self.assertIn("страниц 2", out)
+        text = (self.p / "materials" / "_text" / "отчёт.pdf.txt").read_text(encoding="utf-8")
+        self.assertIn("[стр. 1]\nMarket report 2026", text)
+        self.assertIn("[стр. 2]\nОтток 4,5% в марте\nДоля оплативших 22%", text)
+        sid = self.run_ok("source", "demo", "--kind", "doc", "--title", "Отчёт", "--ref", "materials/отчёт.pdf",
+                          "--local", "materials/отчёт.pdf").split()[0]
+        self.run_ok("claim", "demo", "--type", "fact", "--text", "Доля оплативших 22%",
+                    "--source", f"{sid}:стр. 2", "--quote", "Доля оплативших 22%")
+
+    def test_pdf_without_text_and_encrypted(self):
+        (self.p / "materials" / "скан.pdf").write_bytes(make_pdf([""]))
+        out = self.run_ok("extract", "demo", "materials/скан.pdf")
+        self.assertIn("похоже на скан", out)
+        (self.p / "materials" / "закрытый.pdf").write_bytes(make_pdf(["Secret"], encrypt=True))
+        code, _, err = self.run_cmd("extract", "demo", "materials/закрытый.pdf")
+        self.assertEqual(code, 1)
+        self.assertIn("зашифрован", err)
+
+
 class FindTests(Base):
     def test_find_matches_word_forms_and_show_links(self):
         e1 = self.fact(text="Удержание 30-го дня упало до 22%")
