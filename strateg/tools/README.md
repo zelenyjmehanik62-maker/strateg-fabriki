@@ -49,7 +49,7 @@ python3 tools/strateg.py step podpiska --mode fast       # режим работ
 python3 tools/strateg.py step podpiska --reopen options --reason "бюджет уменьшен до 1 млн"   # вернуться к шагу: он и следующие снова открыты, решения не трогаются
 
 # Проверка и расходы
-python3 tools/strateg.py usage ~/.claude/projects/<папка>/<сеанс>.jsonl --project podpiska   # токены по моделям и цена по прайс-листу из журнала Claude Code
+python3 tools/strateg.py usage ~/.claude/projects/<папка>/<сеанс>.jsonl --project podpiska   # токены по моделям, цена по прайс-листу, время модели и ожидание человека из журнала Claude Code
 python3 tools/strateg.py check podpiska
 python3 tools/strateg.py pii podpiska        # телефоны, почты, номера карт, паспортов, СНИЛС в файлах проекта (кроме materials/private/)
 python3 tools/strateg.py cost podpiska

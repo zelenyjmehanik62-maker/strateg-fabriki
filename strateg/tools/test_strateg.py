@@ -744,6 +744,29 @@ class UsageTests(Base):
         self.assertIn("не измерены", us.report(s))
 
 
+    def test_usage_separates_human_wait(self):
+        """T36: ожидание ответа человека считается от последнего ответа модели и не входит во время модели."""
+        rows = [
+            {"type": "user", "timestamp": "2026-11-17T10:00:00Z", "message": {"content": "Помоги с подпиской"}},
+            {"type": "assistant", "timestamp": "2026-11-17T10:02:00Z",
+             "message": {"id": "a1", "model": "claude-opus-5-5", "usage": {"input_tokens": 0, "output_tokens": 0}}},
+            {"type": "system", "timestamp": "2026-11-17T10:06:59Z"},
+            {"type": "user", "timestamp": "2026-11-17T10:07:00Z", "message": {"content": "Да, верно"}},
+            {"type": "user", "timestamp": "2026-11-17T10:07:01Z",
+             "message": {"content": [{"type": "text", "text": "<system-reminder>служебное</system-reminder>"}]}},
+            {"type": "assistant", "timestamp": "2026-11-17T10:08:00Z",
+             "message": {"id": "a2", "model": "claude-opus-5-5", "usage": {"input_tokens": 0, "output_tokens": 0}}},
+        ]
+        path = self.p / "human.jsonl"
+        path.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+        import usage as us
+        s = us.summarize([path])
+        self.assertAlmostEqual(s["active_minutes"], 8.0)
+        self.assertAlmostEqual(s["human_minutes"], 5.0)
+        self.assertEqual(s["human_replies"], 1)
+        self.assertIn("работа модели 3.0 мин, ожидание ответов человека 5.0 мин", us.report(s))
+
+
 class PiiTests(Base):
     """T28: персональные данные не должны попасть в файлы проекта, кроме materials/private/."""
 

@@ -4,6 +4,10 @@ Claude Code пишет журнал каждого сеанса в JSONL; у к�
 обычный ввод, запись в кэш, чтение из кэша, вывод, поисковые запросы. Здесь они суммируются
 и умножаются на публичные цены API из prices.json.
 
+Время делится на две части: работа модели и ожидание человека — промежутки, которые
+заканчиваются его сообщением (пока он читает и отвечает). Паузы дольше PAUSE_MIN минут —
+перерыв, их нет ни в одной части.
+
 Поиск и загрузка страниц инструментами среды (WebSearch, WebFetch в Claude Code) идут отдельными
 запросами, которых нет в `usage` ответа модели. Их считаем по вызовам инструментов: поиски — по
 `searchCount` в результате (нет его — один поиск на вызов) и по цене поиска из прайс-листа; токены
@@ -37,19 +41,27 @@ def parse(paths):
     responses, stamps = {}, []
     tools = {"search_calls": 0, "searches": 0, "fetches": 0}
     pending = {}
+    human_gaps = []
     for path in paths:
+        prev = None
         for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
             try:
                 rec = json.loads(line)
             except ValueError:
                 continue
             ts = rec.get("timestamp")
+            now = None
             if ts:
                 try:
-                    stamps.append(datetime.fromisoformat(ts.replace("Z", "+00:00")))
+                    now = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    stamps.append(now)
                 except ValueError:
                     pass
             msg = rec.get("message")
+            if now and prev and is_human(rec):
+                human_gaps.append((now - prev).total_seconds() / 60)
+            if now and rec.get("type") == "assistant":
+                prev = now  # ожидание человека считается от последнего ответа модели
             if not isinstance(msg, dict):
                 continue
             content = msg.get("content") if isinstance(msg.get("content"), list) else []
@@ -72,7 +84,26 @@ def parse(paths):
                     pending[block.get("tool_use_id")] = "WebSearch:done"
             if rec.get("type") == "assistant" and msg.get("usage"):
                 responses[msg.get("id") or f"{path}:{len(responses)}"] = msg
-    return list(responses.values()), sorted(stamps), tools
+    return list(responses.values()), sorted(stamps), tools, human_gaps
+
+
+SERVICE_PREFIXES = ("<system-reminder>", "<local-command", "<command-", "Caveat:", "[Request interrupted")
+
+
+def is_human(rec):
+    """Сообщение человека: запись пользователя без результатов инструментов и не служебная вставка среды."""
+    if rec.get("type") != "user":
+        return False
+    msg = rec.get("message")
+    content = msg.get("content") if isinstance(msg, dict) else None
+    if isinstance(content, list):
+        if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+            return False
+        text = " ".join(b.get("text", "") for b in content if isinstance(b, dict))
+    else:
+        text = content or ""
+    text = text.strip()
+    return bool(text) and not text.startswith(SERVICE_PREFIXES)
 
 
 def active_minutes(stamps):
@@ -86,7 +117,7 @@ def active_minutes(stamps):
 
 def summarize(paths, prices=None):
     prices = prices or load_prices()
-    responses, stamps, tools = parse(paths)
+    responses, stamps, tools, human_gaps = parse(paths)
     by_model, unknown = {}, set()
     for msg in responses:
         u = msg["usage"]
@@ -123,13 +154,17 @@ def summarize(paths, prices=None):
     wall = (stamps[-1] - stamps[0]).total_seconds() / 60 if len(stamps) > 1 else 0.0
     return {"by_model": by_model, "total_usd": total, "unknown_models": sorted(m for m in unknown if m),
             "wall_minutes": wall, "active_minutes": active_minutes(stamps), "responses": len(responses),
+            "human_minutes": sum(g for g in human_gaps if g <= PAUSE_MIN),
+            "human_replies": sum(1 for g in human_gaps if g <= PAUSE_MIN),
             "prices_date": prices.get("date"), "usd_rub": prices.get("usd_rub"),
             "tools": tools, "tool_search_usd": tool_search_cost}
 
 
 def report(s):
-    lines = [f"Ответов модели: {s['responses']}; время по журналу среды: {s['active_minutes']:.1f} мин активной работы "
-             f"(всего {s['wall_minutes']:.1f} мин, паузы дольше {PAUSE_MIN} мин не считаются)"]
+    human = s.get("human_minutes", 0.0)
+    lines = [f"Ответов модели: {s['responses']}; время по журналу среды: работа модели {s['active_minutes'] - human:.1f} мин, "
+             f"ожидание ответов человека {human:.1f} мин ({s.get('human_replies', 0)} сообщ.); "
+             f"всего {s['wall_minutes']:.1f} мин, паузы дольше {PAUSE_MIN} мин — перерыв и не считаются"]
     for model, r in sorted(s["by_model"].items()):
         searches = f"поисков через API {r['web_search']}; " if r["web_search"] else ""
         lines.append((f"- {model}: ответов {r['responses']}; ввод {r['input']:,}, запись в кэш {r['cache_write_5m'] + r['cache_write_1h']:,}, "
