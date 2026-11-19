@@ -39,7 +39,7 @@ h2 { font-size: 14pt; color: #087e5a; border-bottom: 1.5px solid #cfe3da; paddin
 h2.section { page-break-before: always; }
 h3 { font-size: 11pt; color: #14352a; margin: 10pt 0 4pt; page-break-after: avoid; }
 p { margin: 4pt 0 6pt; }
-table { border-collapse: collapse; width: 100%; margin: 5pt 0 9pt; font-size: 8.9pt; page-break-inside: auto; }
+table { border-collapse: collapse; width: 100%; margin: 5pt 0 9pt; font-size: 8.9pt; page-break-inside: avoid; }
 tr { page-break-inside: avoid; }
 th { background: #e8f3ee; color: #14352a; text-align: left; }
 th, td { border: 1px solid #c9d8d1; padding: 3.5pt 5pt; vertical-align: top; }
@@ -50,6 +50,7 @@ pre { font-family: Menlo, Consolas, monospace; font-size: 8.4pt; background: #f4
 img { max-width: 100%; max-height: 62mm; width: auto; display: block; margin: 6pt auto 2pt; border: 1px solid #dbe3df; page-break-inside: avoid; }
 img[src$=".svg"] { max-height: 80mm; border: none; }
 .caption { font-size: 8.4pt; color: #5b6e66; text-align: center; margin: 0 0 9pt; }
+.figure { page-break-inside: avoid; }
 ul { margin: 3pt 0 6pt 16pt; padding: 0; }
 li { margin: 1.5pt 0; }
 """
@@ -88,14 +89,14 @@ def md_to_html(md):
             cls = ""
             if level == 2 and re.match(r"\d\.", m.group(2)):
                 section += 1
-                cls = ' class="section"' if section > 1 else ""
+                cls = ' class="section"'
             out.append(f"<h{level}{cls}>{inline(m.group(2))}</h{level}>")
             i += 1
             continue
         m = re.match(r"!\[(.*?)\]\((.*?)\)", line)
         if m:
-            out.append(f'<img src="{(HERE / m.group(2)).as_uri()}" alt="{html.escape(m.group(1))}">'
-                       f'<div class="caption">{inline(m.group(1))}</div>')
+            out.append(f'<div class="figure"><img src="{(HERE / m.group(2)).as_uri()}" alt="{html.escape(m.group(1))}">'
+                       f'<div class="caption">{inline(m.group(1))}</div></div>')
             i += 1
             continue
         if line.startswith("|"):
