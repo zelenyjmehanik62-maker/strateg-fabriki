@@ -23,11 +23,11 @@ STEP_NAMES = {
 SOURCE_KINDS = ["doc", "table", "site", "image", "audio", "video", "interview", "synthetic", "user"]
 CLAIM_TYPES = ["fact", "hypothesis", "forecast", "synthetic"]
 RESULT_FILES = ["findings.md", "options.md", "strategy-product.md", "strategy-comms.md", "verification.md",
-                "summary.md"]
+                "summary.md", "document.md"]
 MODES = {"fast": "быстрый", "full": "полный"}
 REF_RE = re.compile(r"\[(E-\d+(?:\s*,\s*E-\d+)*)\]")
 # Слова, которые показывают читателю, что перед ним не факт.
-HEDGES = ("гипотез", "предполож", "прогноз", "оценк", "вероятн", "возможно", "ожида", "может быть", "допущен")
+HEDGES = ("гипотез", "предполож", "прогноз", "оценк", "вероятн", "возможно", "ожида", "может быть", "допущен", "условн")
 SYNTH_MARKS = ("синтет", "модельн")
 
 
@@ -714,7 +714,7 @@ def check(pdir, finishing=None):
                     errors.append(f"{where}: ответ модельного респондента не назван синтетическим")
                 # Заголовок называет допущение, а не утверждает его: правило слов-маркеров к нему не применяется.
                 if (all(c["type"] != "fact" for c in cited) and not line.lstrip().startswith("#")
-                        and not any(m in low for m in HEDGES + SYNTH_MARKS)):
+                        and not any(m in low.replace("безусловн", "") for m in HEDGES + SYNTH_MARKS)):
                     errors.append(f"{where}: гипотеза или прогноз поданы как факт — "
                                   "назовите это предположением или найдите источник")
             elif (name != "verification.md"

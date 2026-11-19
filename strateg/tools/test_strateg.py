@@ -153,6 +153,19 @@ class CheckTests(Base):
         self.assertEqual(code, 0, out)
         self.assertIn("Проверка пройдена", out)
 
+    def test_document_md_is_checked(self):
+        """T42: итоговый документ по формату брифа проверяется наравне с остальными результатами."""
+        h = self.run_ok("claim", "demo", "--type", "hypothesis", "--text", "Семьи узнают о перебое поздно").split()[0]
+        self.write("document.md", f"## 1. Клиент и проблема\n\nСемьи узнают о перебое поздно [{h}].\n")
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertEqual(code, 1)
+        self.assertIn("document.md:3", out)
+        self.write("document.md", f"## 1. Клиент и проблема\n\nПо условной оценке, семьи узнают о перебое поздно [{h}].\n")
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertEqual(code, 0, out)
+        self.write("document.md", f"Безусловно, семьи узнают о перебое поздно [{h}].\n")
+        self.assertEqual(self.run_cmd("check", "demo")[0], 1)
+
     def test_long_summary_warns_but_passes(self):
         e = self.fact()
         self.write("summary.md", f"Тариф конкурента 299 ₽ [{e}]. " + "слово " * 510 + "\n")
