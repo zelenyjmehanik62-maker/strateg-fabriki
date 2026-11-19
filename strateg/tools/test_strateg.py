@@ -166,6 +166,31 @@ class CheckTests(Base):
         self.write("document.md", f"Безусловно, семьи узнают о перебое поздно [{h}].\n")
         self.assertEqual(self.run_cmd("check", "demo")[0], 1)
 
+    def test_paths_outside_project_are_not_read(self):
+        """Находка Ники: пути из реестра не должны уводить за пределы проекта."""
+        secret = Path(self.tmp.name) / "secret.txt"
+        secret.write_text("Размер рынка составляет 900 млрд рублей\n", encoding="utf-8")
+        code, out, err = self.run_cmd("source", "demo", "--kind", "doc", "--title", "Чужой", "--ref", "x",
+                                      "--local", "../secret.txt")
+        self.assertEqual(code, 1)
+        self.assertIn("вне папки проекта", out + err)
+        # Подложенная запись в реестре: цитата из файла вне проекта не находится, расчёт вне проекта — ошибка
+        with open(self.p / "sources.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"id": "S-009", "kind": "doc", "title": "Чужой", "ref": "x", "local": "../secret.txt"},
+                               ensure_ascii=False) + "\n")
+        with open(self.p / "evidence.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps({"id": "E-099", "type": "fact", "text": "Размер рынка — 900 млрд рублей",
+                                "sources": [{"id": "S-009", "where": "строка 1"}], "status": "active",
+                                "quote": "Размер рынка составляет 900 млрд рублей", "calc": "../secret.txt",
+                                "confidence": "high"}, ensure_ascii=False) + "\n")
+        code, out, _ = self.run_cmd("check", "demo")
+        self.assertEqual(code, 1)
+        self.assertIn("S-009: копия ../secret.txt вне папки проекта", out)
+        self.assertIn("E-099: файл расчёта ../secret.txt вне папки проекта", out)
+        import grounding as gr
+        self.assertIsNone(gr.inside(self.p, "/etc/hosts"))
+        self.assertIsNotNone(gr.inside(self.p, "materials/a.md"))
+
     def test_long_summary_warns_but_passes(self):
         e = self.fact()
         self.write("summary.md", f"Тариф конкурента 299 ₽ [{e}]. " + "слово " * 510 + "\n")

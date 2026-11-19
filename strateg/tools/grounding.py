@@ -54,12 +54,27 @@ def missing_numbers(claim_text, support_text):
     return out
 
 
+def inside(pdir, rel):
+    """Путь из реестра внутри папки проекта или None. Защита от «../» и абсолютных путей
+    в чужом или повреждённом проекте: скрипт не читает файлы вне проекта."""
+    if not rel:
+        return None
+    try:
+        root = Path(pdir).resolve()
+        path = (root / rel).resolve()
+    except (OSError, ValueError):
+        return None
+    return path if path == root or root in path.parents else None
+
+
 def source_texts(pdir, source):
     """Тексты, в которых можно искать цитату: сама копия, если она текстовая, и её разбор из extract."""
     local = (source or {}).get("local")
     if not local:
         return []
-    path = pdir / local
+    path = inside(pdir, local)
+    if path is None:
+        return []
     texts = []
     if path.is_file() and path.suffix.lower() in TEXT_SUFFIXES:
         texts.append(path.read_text(encoding="utf-8", errors="replace"))
@@ -106,8 +121,10 @@ def ground(pdir, claim, sources_by_id):
                             "(сохраните выписку или выполните extract)")
         support += quote
     if calc:
-        path = pdir / calc
-        if not path.is_file():
+        path = inside(pdir, calc)
+        if path is None:
+            errors.append(f"{cid}: файл расчёта {calc} вне папки проекта — укажите путь внутри проекта")
+        elif not path.is_file():
             errors.append(f"{cid}: файл расчёта {calc} не найден")
         else:
             support += "\n" + path.read_text(encoding="utf-8", errors="replace")

@@ -243,6 +243,8 @@ def cmd_source(args):
         if r.get("ref") == args.ref:
             print(f"{r['id']} (уже в реестре, повторно не добавлен)")
             return
+    if args.local and gr.inside(pdir, args.local) is None:
+        raise Fail(f"Копия {args.local} вне папки проекта — сохраните её в materials/ и укажите путь внутри проекта.")
     if args.local and not (pdir / args.local).exists():
         raise Fail(f"Файл {args.local} не найден в папке проекта.")
     row = {"id": next_id(rows, "S"), "kind": args.kind, "title": args.title, "ref": args.ref,
@@ -653,7 +655,9 @@ def check(pdir, finishing=None):
     for s in sources:
         if not (s.get("ref") or "").strip():
             errors.append(f"{s.get('id')}: у источника нет ссылки или пути (ref)")
-        if s.get("local") and not (pdir / s["local"]).exists():
+        if s.get("local") and gr.inside(pdir, s["local"]) is None:
+            errors.append(f"{s.get('id')}: копия {s['local']} вне папки проекта — скрипт её не читает")
+        elif s.get("local") and not (pdir / s["local"]).exists():
             warnings.append(f"{s.get('id')}: локальная копия {s['local']} не найдена")
     strict = finishing in ("options", "strategy")
     critical = gr.critical_ids(pdir, claims_by_id, decisions)
