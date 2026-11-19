@@ -949,6 +949,19 @@ def cmd_usage(args):
     missing = [str(p) for p in paths if not p.is_file()]
     if missing:
         raise Fail("Не найдены журналы: " + ", ".join(missing))
+    if all(us.is_codex(p) for p in paths):
+        s = us.summarize_codex(paths)
+        print(us.report_codex(s))
+        if args.project:
+            pdir = project_dir(args.project)
+            usd = s["total_usd"]
+            journal(pdir, step=load_state(pdir)["step"], action="расход сеанса по журналу Codex: "
+                    + (", ".join(s["models"]) or "модель не указана"), tool="codex", model=", ".join(s["models"]),
+                    minutes=round(s["active_minutes"] - s["human_minutes"], 1),
+                    cost_usd=round(usd, 4) if usd is not None else None,
+                    cost_basis="прайс-лист" if usd is not None else None, result="ok", human_help=False)
+            print(f"Записано в журнал проекта {args.project}.")
+        return
     s = us.summarize(paths)
     print(us.report(s))
     if args.project:

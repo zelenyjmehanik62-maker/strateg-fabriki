@@ -805,6 +805,40 @@ class UsageTests(Base):
         self.assertIn("работа модели 3.0 мин, ожидание ответов человека 5.0 мин", us.report(s))
 
 
+    def test_usage_reads_codex_log(self):
+        """T39: журнал Codex — модель, токены по последнему накопительному счётчику, время модели и человека."""
+        def rec(ts, typ, payload):
+            return json.dumps({"timestamp": f"2026-11-19T10:{ts}Z", "type": typ, "payload": payload})
+        rows = [
+            rec("00:00", "session_meta", {"id": "x"}),
+            rec("00:01", "turn_context", {"model": "gpt-test"}),
+            rec("00:02", "event_msg", {"type": "user_message", "message": "Помоги с брифом"}),
+            rec("02:00", "response_item", {"type": "message", "role": "assistant", "content": []}),
+            rec("02:01", "event_msg", {"type": "token_count", "info": {"total_token_usage": {
+                "input_tokens": 1000, "cached_input_tokens": 600, "output_tokens": 200, "reasoning_output_tokens": 50,
+                "total_tokens": 1200}}}),
+            rec("06:01", "event_msg", {"type": "user_message", "message": "Да, полный режим"}),
+            rec("08:00", "response_item", {"type": "message", "role": "assistant", "content": []}),
+            rec("08:01", "event_msg", {"type": "token_count", "info": {"total_token_usage": {
+                "input_tokens": 3000, "cached_input_tokens": 2000, "output_tokens": 500, "reasoning_output_tokens": 100,
+                "total_tokens": 3500}}}),
+        ]
+        path = self.p / "rollout.jsonl"
+        path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        import usage as us
+        self.assertTrue(us.is_codex(path))
+        s = us.summarize_codex([path])
+        self.assertEqual(s["models"], ["gpt-test"])
+        self.assertEqual(s["tokens"], {"input": 3000, "cached": 2000, "output": 500, "reasoning": 100})
+        self.assertEqual(s["replies"], 2)
+        self.assertAlmostEqual(s["human_minutes"], 4.0)
+        self.assertIsNone(s["total_usd"])  # цены gpt-test нет — деньги не выдумываем
+        out = self.run_ok("usage", str(path), "--project", "demo")
+        self.assertIn("Журнал Codex", out)
+        self.assertIn("расход в деньгах не посчитан", out)
+        self.run_ok("cost", "demo")
+
+
 class PiiTests(Base):
     """T28: персональные данные не должны попасть в файлы проекта, кроме materials/private/."""
 

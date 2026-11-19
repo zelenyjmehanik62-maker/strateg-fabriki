@@ -181,3 +181,92 @@ def report(s):
     if s["unknown_models"]:
         lines.append("Нет цены для моделей: " + ", ".join(s["unknown_models"]) + " — их расход в итог не вошёл; добавьте цену в tools/prices.json.")
     return "\n".join(lines)
+
+
+# --- Журналы Codex (~/.codex/sessions/…/rollout-*.jsonl) ---------------------------------
+# Формат описан по известному устройству журналов Codex CLI и проверен на искусственном примере;
+# на настоящем журнале — сверить (T39). Записи: {"timestamp", "type", "payload"}; модель — в
+# "turn_context", токены — накопительно в event_msg "token_count", сообщения человека — event_msg
+# "user_message".
+
+def is_codex(path):
+    for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines()[:20]:
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(rec, dict) and "payload" in rec and rec.get("type") in (
+                "session_meta", "turn_context", "response_item", "event_msg"):
+            return True
+    return False
+
+
+def summarize_codex(paths, prices=None):
+    prices = prices or load_prices()
+    models, stamps, human_gaps = set(), [], []
+    tokens = {"input": 0, "cached": 0, "output": 0, "reasoning": 0}
+    replies = 0
+    for path in paths:
+        best, prev = {}, None
+        for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+            try:
+                rec = json.loads(line)
+            except ValueError:
+                continue
+            p = rec.get("payload") if isinstance(rec.get("payload"), dict) else {}
+            now = None
+            if rec.get("timestamp"):
+                try:
+                    now = datetime.fromisoformat(rec["timestamp"].replace("Z", "+00:00"))
+                    stamps.append(now)
+                except ValueError:
+                    pass
+            kind = (rec.get("type"), p.get("type"))
+            if rec.get("type") == "turn_context" and p.get("model"):
+                models.add(p["model"])
+            if kind == ("event_msg", "token_count"):
+                total = ((p.get("info") or {}).get("total_token_usage")) or {}
+                if total.get("total_tokens", 0) >= best.get("total_tokens", 0):
+                    best = total
+            if kind == ("event_msg", "user_message"):
+                if now and prev:
+                    human_gaps.append((now - prev).total_seconds() / 60)
+                continue
+            if kind == ("response_item", "message") and p.get("role") == "assistant":
+                replies += 1
+            if now and rec.get("type") in ("response_item", "event_msg") and kind != ("event_msg", "user_message"):
+                if not (kind == ("response_item", "message") and p.get("role") == "user"):
+                    prev = now
+        tokens["input"] += best.get("input_tokens", 0) or 0
+        tokens["cached"] += best.get("cached_input_tokens", 0) or 0
+        tokens["output"] += best.get("output_tokens", 0) or 0
+        tokens["reasoning"] += best.get("reasoning_output_tokens", 0) or 0
+    stamps.sort()
+    priced = [prices["models"][m] for m in models if m in prices["models"]]
+    cost = None
+    if len(models) == 1 and priced:
+        pr = priced[0]
+        cost = ((tokens["input"] - tokens["cached"]) * pr["input"] + tokens["cached"] * pr.get("cache_read", pr["input"])
+                + tokens["output"] * pr["output"]) / 1_000_000
+    human = sum(g for g in human_gaps if g <= PAUSE_MIN)
+    return {"env": "codex", "models": sorted(models), "tokens": tokens, "replies": replies,
+            "active_minutes": active_minutes(stamps), "human_minutes": human,
+            "human_replies": sum(1 for g in human_gaps if g <= PAUSE_MIN),
+            "wall_minutes": (stamps[-1] - stamps[0]).total_seconds() / 60 if len(stamps) > 1 else 0.0,
+            "total_usd": cost, "prices_date": prices.get("date"), "usd_rub": prices.get("usd_rub")}
+
+
+def report_codex(s):
+    t = s["tokens"]
+    lines = [f"Журнал Codex. Ответов модели: {s['replies']}; время по журналу среды: работа модели "
+             f"{s['active_minutes'] - s['human_minutes']:.1f} мин, ожидание ответов человека {s['human_minutes']:.1f} мин "
+             f"({s['human_replies']} сообщ.); всего {s['wall_minutes']:.1f} мин, паузы дольше {PAUSE_MIN} мин — перерыв и не считаются",
+             (f"- {', '.join(s['models']) or 'модель не указана'}: ввод {t['input'] - t['cached']:,}, чтение из кэша {t['cached']:,}, "
+              f"вывод {t['output']:,} токенов (из них рассуждения {t['reasoning']:,})").replace(",", " ")]
+    if s["total_usd"] is None:
+        lines.append("Цены для этой модели в tools/prices.json нет — расход в деньгах не посчитан; токены выше — точные "
+                     "по журналу. Добавьте цену модели с датой и источником, чтобы получить сумму.")
+    else:
+        lines.append(f"Итого по прайс-листу на {s['prices_date']}: ${s['total_usd']:.2f}. Это цена через API по публичным "
+                     "ценам, а не счёт подписки.")
+    return "\n".join(lines)
