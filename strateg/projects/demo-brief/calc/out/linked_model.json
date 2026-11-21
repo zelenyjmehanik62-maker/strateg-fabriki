@@ -1,0 +1,660 @@
+{
+  "inputs": {
+    "initial_groups": 6500,
+    "contacts": 50000,
+    "create_rate": 0.1,
+    "baseline_new_groups": 3500,
+    "baseline_end_groups": 8000,
+    "scenario_end_groups": 10000,
+    "baseline_active_share": 0.625,
+    "scenario_active_share": 0.65,
+    "eligible_share": 0.2,
+    "paid_lines_per_eligible_group": 2,
+    "launch_month": 4,
+    "baseline_line_retention": 0.97,
+    "scenario_line_retention": 0.98,
+    "baseline_profit_rub": 279000000,
+    "margin_per_paid_month_rub": 500,
+    "direct_cost_rub": 700000,
+    "development_budget_rub": null
+  },
+  "baseline": {
+    "group_monthly_survival_calibrated": 0.9769231083838426,
+    "rows": [
+      {
+        "month": 1,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 6641.666871161644,
+        "active_groups": 4151.0417944760275,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 2,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 6780.064511291889,
+        "active_groups": 4237.540319557431,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 3,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 6915.268364080917,
+        "active_groups": 4322.0427275505735,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 4,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7047.352132213046,
+        "active_groups": 4404.595082633154,
+        "first_exposed_paid_lines": 1761.8380330532616,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 5,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7176.387817543737,
+        "active_groups": 4485.242385964835,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 6,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7302.445760349434,
+        "active_groups": 4564.028600218397,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 7,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7425.594677671648,
+        "active_groups": 4640.99667354478,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 8,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7545.90170077617,
+        "active_groups": 4716.188562985107,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 9,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7663.432411747847,
+        "active_groups": 4789.645257342405,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 10,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7778.250879240861,
+        "active_groups": 4861.406799525538,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 11,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7890.419693404006,
+        "active_groups": 4931.512308377503,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 12,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7999.999999999993,
+        "active_groups": 4999.999999999995,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 0.0
+      }
+    ],
+    "extra_paid_line_months": 0.0,
+    "contribution_rub": 0.0,
+    "gross_profit_rub": 278300000.0,
+    "direct_cost_break_even_rub": 0.0
+  },
+  "main": {
+    "group_monthly_survival_calibrated": 0.9846772511790267,
+    "rows": [
+      {
+        "month": 1,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 6817.068799330341,
+        "active_groups": 4431.094719564721,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 2,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7129.279233089574,
+        "active_groups": 4634.031501508223,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 3,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7436.705744793028,
+        "active_groups": 4833.858734115469,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 4,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7739.421637276741,
+        "active_groups": 5030.624064229882,
+        "first_exposed_paid_lines": 2012.249625691953,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 5,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8037.499090175812,
+        "active_groups": 5224.374408614278,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 20.122496256919547
+      },
+      {
+        "month": 6,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8331.009177134913,
+        "active_groups": 5415.155965137694,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 40.32220103432634
+      },
+      {
+        "month": 7,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8620.021882755118,
+        "active_groups": 5603.014223790827,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 60.58318040844206
+      },
+      {
+        "month": 8,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8904.606119281034,
+        "active_groups": 5787.993977532672,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 80.89025082656471
+      },
+      {
+        "month": 9,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9184.829743032258,
+        "active_groups": 5970.139332970968,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 101.22895114886967
+      },
+      {
+        "month": 10,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9460.759570583035,
+        "active_groups": 6149.493720878973,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 121.58551563789679
+      },
+      {
+        "month": 11,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9732.461394694039,
+        "active_groups": 6326.099906551126,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 141.94684786511647
+      },
+      {
+        "month": 12,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9999.999999999989,
+        "active_groups": 6499.999999999993,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 162.30049550492564
+      }
+    ],
+    "extra_paid_line_months": 728.9799386830612,
+    "contribution_rub": 364489.9693415306,
+    "gross_profit_rub": 278664489.9693415,
+    "direct_cost_break_even_rub": 364489.9693415306
+  },
+  "downside": {
+    "group_monthly_survival_calibrated": 0.9846772511790267,
+    "rows": [
+      {
+        "month": 1,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 6817.068799330341,
+        "active_groups": 4431.094719564721,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 2,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7129.279233089574,
+        "active_groups": 4634.031501508223,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 3,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7436.705744793028,
+        "active_groups": 4833.858734115469,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 4,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7739.421637276741,
+        "active_groups": 5030.624064229882,
+        "first_exposed_paid_lines": 2012.249625691953,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 5,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8037.499090175812,
+        "active_groups": 5224.374408614278,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 6,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8331.009177134913,
+        "active_groups": 5415.155965137694,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 7,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8620.021882755118,
+        "active_groups": 5603.014223790827,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 8,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8904.606119281034,
+        "active_groups": 5787.993977532672,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 9,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9184.829743032258,
+        "active_groups": 5970.139332970968,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 10,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9460.759570583035,
+        "active_groups": 6149.493720878973,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 11,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9732.461394694039,
+        "active_groups": 6326.099906551126,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 12,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9999.999999999989,
+        "active_groups": 6499.999999999993,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 0.0
+      }
+    ],
+    "extra_paid_line_months": 0.0,
+    "contribution_rub": 0.0,
+    "gross_profit_rub": 278300000.0,
+    "direct_cost_break_even_rub": 0.0
+  },
+  "sensitivity": {
+    "group_monthly_survival_calibrated": 0.9846772511790267,
+    "rows": [
+      {
+        "month": 1,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 6817.068799330341,
+        "active_groups": 4431.094719564721,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 2,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7129.279233089574,
+        "active_groups": 4634.031501508223,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 3,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7436.705744793028,
+        "active_groups": 4833.858734115469,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 4,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 7739.421637276741,
+        "active_groups": 5030.624064229882,
+        "first_exposed_paid_lines": 2012.249625691953,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 5,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8037.499090175812,
+        "active_groups": 5224.374408614278,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 40.244992513839094
+      },
+      {
+        "month": 6,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8331.009177134913,
+        "active_groups": 5415.155965137694,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 81.04685199379125
+      },
+      {
+        "month": 7,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8620.021882755118,
+        "active_groups": 5603.014223790827,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 122.37123026345796
+      },
+      {
+        "month": 8,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 8904.606119281034,
+        "active_groups": 5787.993977532672,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 164.18498601340633
+      },
+      {
+        "month": 9,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9184.829743032258,
+        "active_groups": 5970.139332970968,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 206.45614683094445
+      },
+      {
+        "month": 10,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9460.759570583035,
+        "active_groups": 6149.493720878973,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 249.15387238664408
+      },
+      {
+        "month": 11,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9732.461394694039,
+        "active_groups": 6326.099906551126,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 292.2484187427326
+      },
+      {
+        "month": 12,
+        "contacts": 4166.666666666667,
+        "created_groups": 416.6666666666667,
+        "connected_groups": 9999.999999999989,
+        "active_groups": 6499.999999999993,
+        "first_exposed_paid_lines": 108.33333333333336,
+        "extra_paid_line_months": 335.71110374952855
+      }
+    ],
+    "extra_paid_line_months": 1491.4176024943442,
+    "contribution_rub": 745708.8012471722,
+    "gross_profit_rub": 279045708.8012472,
+    "direct_cost_break_even_rub": 745708.8012471722
+  },
+  "warning_only": {
+    "group_monthly_survival_calibrated": 0.9769231083838426,
+    "rows": [
+      {
+        "month": 1,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 6641.666871161644,
+        "active_groups": 4151.0417944760275,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 2,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 6780.064511291889,
+        "active_groups": 4237.540319557431,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 3,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 6915.268364080917,
+        "active_groups": 4322.0427275505735,
+        "first_exposed_paid_lines": 0,
+        "extra_paid_line_months": 0
+      },
+      {
+        "month": 4,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7047.352132213046,
+        "active_groups": 4404.595082633154,
+        "first_exposed_paid_lines": 1761.8380330532616,
+        "extra_paid_line_months": 0.0
+      },
+      {
+        "month": 5,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7176.387817543737,
+        "active_groups": 4485.242385964835,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 17.61838033053263
+      },
+      {
+        "month": 6,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7302.445760349434,
+        "active_groups": 4564.028600218397,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 35.0850083112052
+      },
+      {
+        "month": 7,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7425.594677671648,
+        "active_groups": 4640.99667354478,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 52.39690053131257
+      },
+      {
+        "month": 8,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7545.90170077617,
+        "active_groups": 4716.188562985107,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 69.55131380209448
+      },
+      {
+        "month": 9,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7663.432411747847,
+        "active_groups": 4789.645257342405,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 86.54573493568533
+      },
+      {
+        "month": 10,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7778.250879240861,
+        "active_groups": 4861.406799525538,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 103.37787089098208
+      },
+      {
+        "month": 11,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7890.419693404006,
+        "active_groups": 4931.512308377503,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 120.04563927421914
+      },
+      {
+        "month": 12,
+        "contacts": 2916.6666666666665,
+        "created_groups": 291.6666666666667,
+        "connected_groups": 7999.999999999993,
+        "active_groups": 4999.999999999995,
+        "first_exposed_paid_lines": 72.91666666666667,
+        "extra_paid_line_months": 136.54715918242633
+      }
+    ],
+    "extra_paid_line_months": 621.1680072584578,
+    "contribution_rub": 310584.0036292289,
+    "gross_profit_rub": 278610584.0036292,
+    "direct_cost_break_even_rub": 310584.0036292289
+  },
+  "target_extra_paid_months": 13400.0,
+  "recruitment_capacity_not_power": [
+    {
+      "total_families": 1000,
+      "first_eligible_per_week": 25,
+      "weeks_including_last_followup": 41
+    },
+    {
+      "total_families": 1000,
+      "first_eligible_per_week": 100,
+      "weeks_including_last_followup": 11
+    },
+    {
+      "total_families": 1000,
+      "first_eligible_per_week": 250,
+      "weeks_including_last_followup": 5
+    },
+    {
+      "total_families": 3000,
+      "first_eligible_per_week": 25,
+      "weeks_including_last_followup": 121
+    },
+    {
+      "total_families": 3000,
+      "first_eligible_per_week": 100,
+      "weeks_including_last_followup": 31
+    },
+    {
+      "total_families": 3000,
+      "first_eligible_per_week": 250,
+      "weeks_including_last_followup": 13
+    },
+    {
+      "total_families": 6000,
+      "first_eligible_per_week": 25,
+      "weeks_including_last_followup": 241
+    },
+    {
+      "total_families": 6000,
+      "first_eligible_per_week": 100,
+      "weeks_including_last_followup": 61
+    },
+    {
+      "total_families": 6000,
+      "first_eligible_per_week": 250,
+      "weeks_including_last_followup": 25
+    }
+  ],
+  "activation_14d": {
+    "baseline": 0.45,
+    "scenario": 0.55,
+    "target": 0.6,
+    "note": "Отдельная гипотеза, не равна месячной активности и не умножается на неё"
+  }
+}

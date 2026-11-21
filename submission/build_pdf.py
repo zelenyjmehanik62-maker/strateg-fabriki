@@ -87,7 +87,7 @@ def md_to_html(md):
         if m:
             level = len(m.group(1))
             cls = ""
-            if level == 2 and re.match(r"\d\.", m.group(2)):
+            if level == 2 and (re.match(r"\d\.", m.group(2)) or m.group(2) == "Кадры живого демо"):
                 section += 1
                 cls = ' class="section"'
             out.append(f"<h{level}{cls}>{inline(m.group(2))}</h{level}>")

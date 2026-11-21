@@ -1,0 +1,39 @@
+{
+  "base": {
+    "extra_paid_months": 550.8943271668076,
+    "contribution_rub": 275447.1635834038,
+    "new_direct_cost_rub": 700000,
+    "annual_gross_profit_rub": 278575447.1635834
+  },
+  "downside": {
+    "extra_paid_months": 0.0,
+    "contribution_rub": 0.0,
+    "new_direct_cost_rub": 700000,
+    "annual_gross_profit_rub": 278300000.0
+  },
+  "sensitivity": {
+    "extra_paid_months": 1118.599727632851,
+    "contribution_rub": 559299.8638164256,
+    "new_direct_cost_rub": 700000,
+    "annual_gross_profit_rub": 278859299.86381644
+  },
+  "target_extra_months_with_cost": 13400.0,
+  "active_at_12000_with_old_share": 7500.0,
+  "active_gap_after_scale": 500.0,
+  "family_coverage_main": 0.1,
+  "family_coverage_year3_conditional": 0.2,
+  "cohorts": [
+    [
+      600,
+      9
+    ],
+    [
+      1800,
+      6
+    ],
+    [
+      3600,
+      3
+    ]
+  ]
+}
